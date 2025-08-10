@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/emailinator/__init__.py
+src/emailinator/email_parser.py
+src/emailinator/main.py
+src/emailinator/openai_client.py
+src/emailinator.egg-info/PKG-INFO
+src/emailinator.egg-info/SOURCES.txt
+src/emailinator.egg-info/dependency_links.txt
+src/emailinator.egg-info/requires.txt
+src/emailinator.egg-info/top_level.txt
+tests/test_email_parser.py
