@@ -19,3 +19,5 @@ ENV/
 # IDEs
 .vscode/
 .idea/
+
+*.egg-info

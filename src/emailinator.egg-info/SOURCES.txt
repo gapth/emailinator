@@ -9,4 +9,8 @@ src/emailinator.egg-info/SOURCES.txt
 src/emailinator.egg-info/dependency_links.txt
 src/emailinator.egg-info/requires.txt
 src/emailinator.egg-info/top_level.txt
+src/emailinator/db/base.py
+src/emailinator/db/models.py
+src/emailinator/db/sqlite_db.py
+src/emailinator/db/tasks.py
 tests/test_email_parser.py

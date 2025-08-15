@@ -1,0 +1,97 @@
+Delivered-To: nattavude@gmail.com
+Received: by 2002:a05:7011:a068:b0:43a:7d25:3e5a with SMTP id ix40csp3209180mdc;
+        Mon, 28 Jul 2025 10:00:27 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IFmSEQ3xQHxrzh6JzS4pC2QkImsXk9KzSila8hhWTUpPn57q4wJC60auOHhQpKL5mUeIqfg
+X-Received: by 2002:a05:620a:5695:b0:7d4:5db0:5b95 with SMTP id af79cd13be357-7e63bfb90a8mr1301731785a.58.1753722027051;
+        Mon, 28 Jul 2025 10:00:27 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1753722027; cv=none;
+        d=google.com; s=arc-20240605;
+        b=UO309+/GSrZL4t29za69xAZflmORIzsK/Yn+9H2xH1ZZ/bpPnmWyyENI2EZWxqovrr
+         vPwdMAGpaZU61rE+Dl2FUcZ8R0db+/kZWEpI1cmgXH9sy2u4jsN8Mt2y+JhQb/CFLucK
+         OQwz201k7kJ5XS5LFyBkCZv7bAr3iHmvCNM1cRizqMUMnFQaN9qCLL5FwVT3NkfoV3bM
+         6TnsevZMiMVAv7uAa77q8fA4Lv3hKz6iIZdttsxPrTco3SbZwbhjFj+tSZVTm3/+X3m6
+         esK8zNMDXup3mD1sAkWy/Pro/Jg4AKQIH2cqCjprPt1nIblbIxe0BPcRUykSfazDQALa
+         T6Dg==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=list-unsubscribe-post:reply-to:list-unsubscribe:date:message-id:to
+         :from:subject:mime-version:sender:dkim-signature:dkim-signature;
+        bh=xbV5Z9r1S8e4y+qFwxi+817hs8+iV0oEaPtyCBiPFCY=;
+        fh=BSGZm+T5QV6kyLszOmBsxN2cGWxH8gT8/BPu5xik640=;
+        b=SyzPN7AKXCMK/pPECc6MLfmNrkdjU3gMDozO+beWzYqLxReaoqAhu+FuBbH1sgp4XR
+         5zYtpt+/Wd+YXJhBsWfX9Ak4ELhcZ/Z6N2cTWxhP/r+j7SG7VnV4mukZyXATcLKXLuNW
+         7dRFhe/2/eOI68eni3wEMhqpl6vDdMOlX4s2wfEhE9bgmIzpZL+3smnMWP7EwET5bUon
+         /hsDjy1ILh5ouSJZxD6ZOT9xOft76B14awcUDp1O0iBMzQ8ay0LcioXZGK+V2kEtLznz
+         ZsVYfa3t3HEk219sjSvW/pEQ+7UL4jws91kPBTvwj2gQwMff9a8e5GSyVjqlC+Z1fLyn
+         LuCg==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@notify.castilleja.org header.s=smtp header.b=qZSsSMYn;
+       dkim=pass header.i=@mailgun.org header.s=mg header.b=JK8pmMVJ;
+       spf=pass (google.com: domain of bounce+8f7638.eb76d-nattavude=gmail.com@notify.castilleja.org designates 198.244.49.19 as permitted sender) smtp.mailfrom="bounce+8f7638.eb76d-nattavude=gmail.com@notify.castilleja.org";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=castilleja.org
+Return-Path: <bounce+8f7638.eb76d-nattavude=gmail.com@notify.castilleja.org>
+Received: from a19.a6e4cdb8.use4.send.mailgun.net (a19.a6e4cdb8.use4.send.mailgun.net. [198.244.49.19])
+        by mx.google.com with UTF8SMTPS id af79cd13be357-7e6438cf5aasi337238685a.682.2025.07.28.10.00.26
+        for <nattavude@gmail.com>
+        (version=TLS1_2 cipher=ECDHE-ECDSA-AES128-GCM-SHA256 bits=128/128);
+        Mon, 28 Jul 2025 10:00:27 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounce+8f7638.eb76d-nattavude=gmail.com@notify.castilleja.org designates 198.244.49.19 as permitted sender) client-ip=198.244.49.19;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@notify.castilleja.org header.s=smtp header.b=qZSsSMYn;
+       dkim=pass header.i=@mailgun.org header.s=mg header.b=JK8pmMVJ;
+       spf=pass (google.com: domain of bounce+8f7638.eb76d-nattavude=gmail.com@notify.castilleja.org designates 198.244.49.19 as permitted sender) smtp.mailfrom="bounce+8f7638.eb76d-nattavude=gmail.com@notify.castilleja.org";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=castilleja.org
+DKIM-Signature: a=rsa-sha256; v=1; c=relaxed/relaxed; d=notify.castilleja.org; q=dns/txt; s=smtp; t=1753722026; x=1753729226;
+ h=list-unsubscribe-post: reply-to: list-unsubscribe: date: message-id: To: To: From: From: Subject: Subject: Content-Type: Mime-Version: Sender: Sender: X-Feedback-Id;
+ bh=xbV5Z9r1S8e4y+qFwxi+817hs8+iV0oEaPtyCBiPFCY=;
+ b=qZSsSMYnFEz6vOs7VXQaTYLX/CUGxK5gn/m70aEFjhstmsX1IOp0A3rj05PxkIuYLkJmm5awLvwS2e+wuLuMFW5P4mviLZEQpKEgwWN6NyB/1OglZIo/sdMWoZ27BtLE+fkZLANOz569nO8TPp5os3muQEobRQl/gKUK92H2Mzw=
+DKIM-Signature: a=rsa-sha256; v=1; c=relaxed/relaxed; d=mailgun.org; q=dns/txt; s=mg; t=1753722026; x=1753729226;
+ h=list-unsubscribe-post: reply-to: list-unsubscribe: date: message-id: To: To: From: From: Subject: Subject: Content-Type: Mime-Version: Sender: Sender: X-Feedback-Id;
+ bh=xbV5Z9r1S8e4y+qFwxi+817hs8+iV0oEaPtyCBiPFCY=;
+ b=JK8pmMVJS+exeJPx/6E9dVY4IoyZ0eSbUplY8dVHsgBP6/ThuNzfzljB+E758ay3Fjufg3ehIjxGNfPWhe8HSm9Cf5vk3GkV8fcjX2g/WH0zDr86MPrACrdmwnMK4rc0NcJ+BHXiFNapdOA1npzr1tlPVGULnwDIfMKWYj64r34=
+X-Mailgun-Sid: WyI2NmVlOCIsIm5hdHRhdnVkZUBnbWFpbC5jb20iLCJlYjc2ZCJd
+X-Feedback-Id: noreply@notify.castilleja.org:notification_service:53284a675a7618026cabd34c:mailgun
+Received: by 4eac898636cd with HTTP id 6887ac9dd61c1fae916a5784; Mon, 28 Jul 2025
+ 17:00:10 GMT
+X-Mailgun-Sending-Ip: 198.244.49.19
+X-Mailgun-Batch-Id: 6887ac9a95463aa9542754e8
+Sender: noreply@notify.castilleja.org
+Mime-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="762165af83b782decdf6e93bd72c9761915131e427e90c9b460ef876232c"
+Subject: Colours Uniform Website Is Now Open
+From: Castilleja School <noreply@notify.castilleja.org>
+To: nattavude@gmail.com
+X-Mailgun-Tag: notification_service
+X-Mailgun-Track-Pixel-Location-Top: true
+message-id: <6887ac9a950e5_12b20438a9@localhost.mail>
+date: Mon, 28 Jul 2025 17:00:10 +0000
+list-unsubscribe: https://www.castilleja.org/fs/pages/unsubscribe/WExPdUdGeGlVMVNjMWNYQmtrTVRtNDZPbzJ6cVFRV0dveGxvdjRrREdNdG04NCtnaHNydk1jMGhOenlscXBNVm95QStKeGI3UjlyOS93dWEzZGhFVldKR1lod2tjbmtYeXBGdE11VDVzcU9HUXNnRERiRlVOQlhWRDBKQ1dxUVU1NlJkWEpHNDl4KzMvZE8wSTNoYW5kajB5ZENpYlM5ZTJZSGt5NHpqajg3NTA1WTF3aElkWG5nYU9kOTNvUkFyY1hPYXpoS09YZjI4c0xaZVhEVEZhR3FXVlZrUUtVTHJZSDJMY2ptcmpCWXgrTnA1M3Z6aGZ1RnVQQXVzZGptSS9mc3RkdlBlUXVyQVRQV24vREtCSldTeDRSTm5OZlRSaWRvdmtLR3BwdFRDdU1KbTlqU2Z2SC9oYU9GMTJFWHJHeEVYdXAwNTZ5VFJOS1o2Y010Y3BQb2pqQzEybjZVQXhUREdRSFRVcHpaRSs0RUpyME5UL3pUTmw3RFdDTEhORFVKNmp6dWNyT2licUpVcXJLNXJ4NlRPMlpaSGJ0OUNXaUh2M05uQUJMaXRMRThkcXlDcHhHT2trSWt6dUh5Qi0tVHRQdjNXVVFXYUZxcXZlUjBENmJUZz09--63675c8943df4704d10713814c00216a6c5458e2
+reply-to: Castilleja School <lzappas@castilleja.org>
+list-unsubscribe-post: List-Unsubscribe=One-Click
+X-Mailgun-Variables: {"contact_id": "1524862", "mailing_id": "345956", "tenant_name": "castilleja"}
+
+--762165af83b782decdf6e93bd72c9761915131e427e90c9b460ef876232c
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain; charset=ascii
+
+Task One
+Task Two
+Task Three
+
+
+--762165af83b782decdf6e93bd72c9761915131e427e90c9b460ef876232c
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional //EN" "http://www=
+=2Ew3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+	<body>
+<p>Task Eleven
+<p>Task Twelve
+<p>Task Thirteen
+        </body>
+</html>
+
+--762165af83b782decdf6e93bd72c9761915131e427e90c9b460ef876232c--
