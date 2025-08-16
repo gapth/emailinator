@@ -1,11 +1,32 @@
 from .db import SessionLocal, init_db
 from .models import Task
+from datetime import date
 
 init_db()
 
-def add_task(title: str, description: str = "", status: str = "pending"):
+def add_task(
+    title: str,
+    description: str = None,
+    due_date: date = None,  # Accepts Python date object
+    consequence_if_ignore: str = None,
+    parent_action: str = None,
+    parent_requirement_level: str = None,
+    student_action: str = None,
+    student_requirement_level: str = None,
+    status: str = "pending"
+):
     session = SessionLocal()
-    task = Task(title=title, description=description, status=status)
+    task = Task(
+        title=title,
+        description=description,
+        due_date=due_date,
+        consequence_if_ignore=consequence_if_ignore,
+        parent_action=parent_action,
+        parent_requirement_level=parent_requirement_level,
+        student_action=student_action,
+        student_requirement_level=student_requirement_level,
+        status=status
+    )
     session.add(task)
     session.commit()
     session.refresh(task)

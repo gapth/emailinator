@@ -10,6 +10,23 @@ class Task(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(Date, nullable=True)
+    consequence_if_ignore = Column(Text, nullable=True)
+    parent_action = Column(
+        String(20),
+        nullable=True
+    )  # ENUM: "NONE", "SUBMIT", "SIGN", "PAY", "PURCHASE", "ATTEND", "TRANSPORT", "VOLUNTEER", "OTHER"
+    parent_requirement_level = Column(
+        String(25),
+        nullable=True
+    )  # ENUM: "NONE", "OPTIONAL", "VOLUNTEER_OPPORTUNITY", "MANDATORY"
+    student_action = Column(
+        String(20),
+        nullable=True
+    )  # ENUM: "NONE", "SUBMIT", "ATTEND", "SETUP", "BRING", "PREPARE", "WEAR", "COLLECT", "OTHER"
+    student_requirement_level = Column(
+        String(25),
+        nullable=True
+    )  # ENUM: "NONE", "OPTIONAL", "VOLUNTEER_OPPORTUNITY", "MANDATORY"
     status = Column(String(50), default="pending")
 
     def __repr__(self):
