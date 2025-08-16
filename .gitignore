@@ -23,3 +23,5 @@ ENV/
 *.egg-info
 
 tasks.db
+
+manual_test_data
