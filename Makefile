@@ -31,7 +31,7 @@ run: install
 		echo "Error: Please provide INPUT=<file.eml>"; \
 		exit 1; \
 	fi
-	$(ACTIVATE) && python -m emailinator.main --input $(INPUT)
+	$(ACTIVATE) && python -m emailinator.main --input "$(INPUT)"
 
 # Run tests with pytest
 test: install
