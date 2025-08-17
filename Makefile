@@ -4,7 +4,7 @@ ACTIVATE := source $(VENV)/bin/activate
 DB := tasks.db
 STAMP := $(VENV)/.requirements.stamp
 
-# Default target: setup & run
+# Default target: run the service
 default: run
 
 .PHONY: venv install run test clean dbshell
@@ -25,13 +25,9 @@ $(STAMP): requirements.txt | $(VENV)/bin/activate
 
 install: $(STAMP)
 
-# Run the main program
+# Run the FastAPI service
 run: install
-	@if [ -z "$(INPUT)" ]; then \
-		echo "Error: Please provide INPUT=<file.eml>"; \
-		exit 1; \
-	fi
-	$(ACTIVATE) && python -m emailinator.main --input "$(INPUT)"
+	$(ACTIVATE) && python -m emailinator.main
 
 # Run tests with pytest
 test: install

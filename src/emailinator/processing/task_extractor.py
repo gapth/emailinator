@@ -3,6 +3,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from emailinator.storage.models import Task
 from emailinator.storage.schema_utils import sqlalchemy_to_jsonschema
+import logging
 
 load_dotenv()  # Load .env file if present
 
@@ -96,8 +97,11 @@ def extract_tasks_from_text(email_text: str) -> list[dict]:
     # gpt-4.1-mini
     input_usd_per_token = 0.4e-6
     output_usd_per_token = 1.6e-6
-    print(f"API cost (USD): {resp.usage.prompt_tokens * input_usd_per_token + resp.usage.completion_tokens * output_usd_per_token:.6f}")
-    # Parse and return the tasks list from the JSON response
+    api_cost = resp.usage.prompt_tokens * input_usd_per_token + resp.usage.completion_tokens * output_usd_per_token
+
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"API cost (USD): {api_cost:.6f}")
+
     import json
     data = json.loads(resp.choices[0].message.content)
     return data.get("tasks", [])

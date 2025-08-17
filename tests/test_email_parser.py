@@ -1,9 +1,12 @@
-from emailinator.email_parser import extract_tasks
+import sys
+sys.path.append('src')
 
-def test_extract_tasks_mock(monkeypatch):
-    def fake_ai(_):
-        return ["Task A", "Task B"]
+from emailinator.input.email_reader import read_email_file
+from emailinator.processing.email_parser import extract_text_from_email
 
-    monkeypatch.setattr("emailinator.email_parser.extract_tasks_with_ai", fake_ai)
-    result = extract_tasks("Some email")
-    assert result == ["Task A", "Task B"]
+
+def test_extract_text():
+    msg = read_email_file("tests/data/simple_email1.eml")
+    text = extract_text_from_email(msg)
+    assert "Task One" in text
+    assert "Task Eleven" in text

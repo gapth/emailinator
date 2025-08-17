@@ -20,7 +20,7 @@ ENV/
 .vscode/
 .idea/
 
-*.egg-info
+*.egg-info/
 
 tasks.db
 
