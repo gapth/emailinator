@@ -1,13 +1,21 @@
 import os
-from openai import OpenAI
+import logging
+
 from dotenv import load_dotenv
+from openai import OpenAI
+
 from emailinator.storage.models import Task
 from emailinator.storage.schema_utils import sqlalchemy_to_jsonschema
-import logging
+
+# === Constants ===
+MODEL_NAME = "gpt-4.1-mini"
+INPUT_USD_PER_TOKEN = 0.4e-6
+OUTPUT_USD_PER_TOKEN = 1.6e-6
 
 load_dotenv()  # Load .env file if present
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key) if api_key else None
 
 def extract_tasks_from_text(email_text: str) -> list[dict]:
     """
@@ -79,8 +87,11 @@ def extract_tasks_from_text(email_text: str) -> list[dict]:
         """
     )
 
+    if client is None:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+
     resp = client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model=MODEL_NAME,
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": f"Extract tasks from this email:\n\n{email_text}"}
@@ -91,17 +102,17 @@ def extract_tasks_from_text(email_text: str) -> list[dict]:
         # top_p=1
     )
     # Log usages
-    # gpt-5
-    # input_usd_per_token = 1.25e-6
-    # output_usd_per_token = 10e-6
-    # gpt-4.1-mini
-    input_usd_per_token = 0.4e-6
-    output_usd_per_token = 1.6e-6
-    api_cost = resp.usage.prompt_tokens * input_usd_per_token + resp.usage.completion_tokens * output_usd_per_token
+    api_cost = (
+        resp.usage.prompt_tokens * INPUT_USD_PER_TOKEN
+        + resp.usage.completion_tokens * OUTPUT_USD_PER_TOKEN
+    )
 
-    logger = logging.getLogger("uvicorn")
+    logger = logging.getLogger("emailinator")
     logger.info(f"API cost (USD): {api_cost:.6f}")
 
     import json
+
     data = json.loads(resp.choices[0].message.content)
-    return data.get("tasks", [])
+    tasks = data.get("tasks", [])
+    logger.info(f"Extracted {len(tasks)} tasks")
+    return tasks

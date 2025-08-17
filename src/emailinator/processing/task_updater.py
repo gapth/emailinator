@@ -1,6 +1,9 @@
-from ..storage import crud
 from datetime import datetime
+import logging
+
 from fuzzywuzzy import fuzz
+
+from ..storage import crud
 
 def is_duplicate(new_task, existing_tasks, threshold=50):
     new_title = new_task.get("title", "").lower()
@@ -13,7 +16,9 @@ def is_duplicate(new_task, existing_tasks, threshold=50):
 
 def update_tasks_in_db(task_list):
     """Takes a list of dicts and adds them to DB, deduplicating by fuzzy title match."""
+    logger = logging.getLogger("emailinator")
     existing_tasks = crud.list_tasks()
+    added = 0
     for task in task_list:
         due_date_str = task.get("due_date")
         due_date = None
@@ -38,3 +43,6 @@ def update_tasks_in_db(task_list):
             student_requirement_level=task.get("student_requirement_level"),
             status=task.get("status", "pending")
         )
+        added += 1
+
+    logger.info(f"Updated {added} tasks in DB")
