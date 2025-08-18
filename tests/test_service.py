@@ -74,3 +74,42 @@ def test_post_email_dedup(monkeypatch):
     assert fake_extract.called
     assert fake_delete.called
     assert fake_update.called_with == [{"title": "Existing"}, {"title": "Task B"}]
+
+
+def test_get_tasks():
+    from datetime import date
+
+    crud.delete_all_tasks()
+    crud.add_task(title="Task A", due_date=date(2024, 9, 1), parent_requirement_level="MANDATORY")
+    crud.add_task(title="Task B", parent_requirement_level="OPTIONAL")
+    crud.add_task(title="Task C", due_date=date(2024, 9, 2), parent_requirement_level="OPTIONAL")
+
+    client = TestClient(app)
+    resp = client.get("/tasks")
+    assert resp.status_code == 200
+    titles = {t["title"] for t in resp.json()["tasks"]}
+    assert titles == {"Task A", "Task B", "Task C"}
+
+    resp = client.get("/tasks", params={"due_date_to": "2024-09-01"})
+    assert resp.status_code == 200
+    titles = {t["title"] for t in resp.json()["tasks"]}
+    assert titles == {"Task A", "Task B"}
+
+    resp = client.get("/tasks", params={"due_date_from": "2024-09-02"})
+    assert resp.status_code == 200
+    titles = {t["title"] for t in resp.json()["tasks"]}
+    assert titles == {"Task B", "Task C"}
+
+    resp = client.get(
+        "/tasks",
+        params={
+            "due_date_from": "2024-09-01",
+            "due_date_to": "2024-09-02",
+            "parent_requirement_levels": ["MANDATORY"],
+        },
+    )
+    assert resp.status_code == 200
+    titles = {t["title"] for t in resp.json()["tasks"]}
+    assert titles == {"Task A"}
+
+    crud.delete_all_tasks()

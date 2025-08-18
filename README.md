@@ -30,3 +30,27 @@ python -m emailinator.send_email --file path/to/email.eml
 ```
 
 You can override the service URL with `--url`.
+
+## Listing tasks
+
+Retrieve stored tasks with a browser or `curl` using the `/tasks` endpoint. All query parameters are optional:
+
+- `due_date_from` and `due_date_to` (`YYYY-MM-DD`) bound the due date range.
+- `include_no_due_date` (default `true`) excludes tasks without a due date when set to `false`.
+- `parent_requirement_levels` (repeatable) limits results to specific levels.
+
+Omitting a parameter means no filtering on that field.
+
+Example with `curl`:
+
+```bash
+curl "http://localhost:8000/tasks?due_date_from=2024-09-01&due_date_to=2024-09-30&parent_requirement_levels=MANDATORY&parent_requirement_levels=OPTIONAL"
+```
+
+You can also navigate to a simpler query, e.g.:
+
+```
+http://localhost:8000/tasks?due_date_to=2024-09-01
+```
+
+The response JSON matches the `tasks_list` format used throughout the project.

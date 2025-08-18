@@ -1,6 +1,8 @@
 import os
 import logging
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from datetime import date
+from typing import List, Optional
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 
 from .input.email_reader import read_email_bytes
 from .processing.email_parser import extract_text_from_email
@@ -46,3 +48,56 @@ async def receive_email(file: UploadFile = File(...)):
 
     task_updater.update_tasks_in_db(tasks)
     return {"task_count": len(tasks)}
+
+
+@app.get("/tasks")
+def list_tasks(
+    due_date_from: Optional[date] = Query(None),
+    due_date_to: Optional[date] = Query(None),
+    include_no_due_date: bool = True,
+    parent_requirement_levels: Optional[List[str]] = Query(None),
+):
+    """Return tasks filtered by due date range and parent requirement level."""
+    if (
+        due_date_from is not None
+        and due_date_to is not None
+        and due_date_from > due_date_to
+    ):
+        raise HTTPException(status_code=400, detail="due_date_from must be before due_date_to")
+
+    all_tasks = crud.list_tasks()
+    filtered = []
+    for t in all_tasks:
+        if (
+            parent_requirement_levels is not None
+            and t.parent_requirement_level not in parent_requirement_levels
+        ):
+            continue
+
+        if t.due_date is None:
+            if not include_no_due_date:
+                continue
+        else:
+            if due_date_from is not None and t.due_date < due_date_from:
+                continue
+            if due_date_to is not None and t.due_date > due_date_to:
+                continue
+
+        task_dict = {"title": t.title}
+        if t.description:
+            task_dict["description"] = t.description
+        if t.due_date:
+            task_dict["due_date"] = t.due_date.isoformat()
+        if t.consequence_if_ignore:
+            task_dict["consequence_if_ignore"] = t.consequence_if_ignore
+        if t.parent_action:
+            task_dict["parent_action"] = t.parent_action
+        if t.parent_requirement_level:
+            task_dict["parent_requirement_level"] = t.parent_requirement_level
+        if t.student_action:
+            task_dict["student_action"] = t.student_action
+        if t.student_requirement_level:
+            task_dict["student_requirement_level"] = t.student_requirement_level
+        filtered.append(task_dict)
+
+    return {"tasks": filtered}
