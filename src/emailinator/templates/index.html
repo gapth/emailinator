@@ -5,6 +5,13 @@
     <title>Tasks</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+    .htmx-swapping {
+        opacity: 0;
+        transform: translateX(100%);
+        transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+    }
+    </style>
 </head>
 <body class="p-4">
     <h1 class="text-xl font-bold mb-4">Tasks</h1>
@@ -36,17 +43,42 @@
 
     <div id="tasks" class="space-y-2">
         {% for task in tasks %}
-        <div id="task-{{ task.id }}" class="border p-2">
+        <div id="task-{{ task.id }}" class="border p-2 cursor-pointer"
+             onclick="openModal(this)"
+             data-title="{{ task.title|e }}"
+             {% if task.description %}data-description="{{ task.description|e }}"{% endif %}
+             {% if task.consequence_if_ignore %}data-consequence="{{ task.consequence_if_ignore|e }}"{% endif %}
+             {% if task.parent_action %}data-parent-action="{{ task.parent_action|e }}"{% endif %}
+             {% if task.parent_requirement_level %}data-parent-req="{{ task.parent_requirement_level|e }}"{% endif %}
+             {% if task.student_action %}data-student-action="{{ task.student_action|e }}"{% endif %}
+             {% if task.student_requirement_level %}data-student-req="{{ task.student_requirement_level|e }}"{% endif %}
+             {% if task.due_date %}data-due-date="{{ task.due_date }}"{% endif %}
+        >
             <h3 class="font-semibold">{{ task.title }}</h3>
-            {% if task.description %}<p>{{ task.description }}</p>{% endif %}
             {% if task.due_date %}<p class="text-sm text-gray-500">Due: {{ task.due_date }}</p>{% endif %}
             {% if task.parent_requirement_level %}<p class="text-sm">Parent requirement: {{ task.parent_requirement_level }}</p>{% endif %}
             <div class="mt-2 space-x-2">
-                <button hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"done"}' hx-swap="outerHTML" class="bg-green-500 text-white px-2 py-1 rounded">Done</button>
-                <button hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"dismissed"}' hx-swap="outerHTML" class="bg-gray-500 text-white px-2 py-1 rounded">Dismiss</button>
+                <button onclick="event.stopPropagation()" hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"done"}' hx-target="#task-{{ task.id }}" hx-swap="outerHTML swap:0.3s" class="bg-green-500 text-white px-2 py-1 rounded">Done</button>
+                <button onclick="event.stopPropagation()" hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"dismissed"}' hx-target="#task-{{ task.id }}" hx-swap="outerHTML swap:0.3s" class="bg-gray-500 text-white px-2 py-1 rounded">Dismiss</button>
             </div>
         </div>
         {% endfor %}
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" onclick="if (event.target === this) closeModal()">
+        <div class="bg-white p-4 rounded w-11/12 max-w-md">
+            <h2 class="text-xl font-bold mb-2" id="modal-title"></h2>
+            <p id="modal-description" class="mb-2 hidden"></p>
+            <p id="modal-parent-action" class="mb-2 hidden"><strong>Parent action:</strong> <span></span></p>
+            <p id="modal-parent-requirement" class="mb-2 hidden"><strong>Parent requirement:</strong> <span></span></p>
+            <p id="modal-student-action" class="mb-2 hidden"><strong>Student action:</strong> <span></span></p>
+            <p id="modal-student-requirement" class="mb-2 hidden"><strong>Student requirement:</strong> <span></span></p>
+            <p id="modal-consequence" class="mb-2 hidden"><strong>Consequence if ignored:</strong> <span></span></p>
+            <p id="modal-due-date" class="mb-2 hidden"><strong>Due:</strong> <span></span></p>
+            <div class="text-right">
+                <button class="mt-2 bg-blue-500 text-white px-3 py-1 rounded" onclick="closeModal()">Close</button>
+            </div>
+        </div>
     </div>
 <script>
 function adjustFilters(form) {
@@ -58,6 +90,36 @@ function adjustFilters(form) {
     }
     document.getElementById('include_no_due_date_hidden').value = document.getElementById('include_no_due_date_checkbox').checked ? '1' : '0';
     return true;
+}
+
+function setField(id, value, useSpan) {
+    const el = document.getElementById(id);
+    if (value) {
+        if (useSpan) {
+            el.querySelector('span').textContent = value;
+        } else {
+            el.textContent = value;
+        }
+        el.classList.remove('hidden');
+    } else {
+        el.classList.add('hidden');
+    }
+}
+
+function openModal(el) {
+    document.getElementById('modal-title').textContent = el.dataset.title || '';
+    setField('modal-description', el.dataset.description);
+    setField('modal-parent-action', el.dataset.parentAction, true);
+    setField('modal-parent-requirement', el.dataset.parentReq, true);
+    setField('modal-student-action', el.dataset.studentAction, true);
+    setField('modal-student-requirement', el.dataset.studentReq, true);
+    setField('modal-consequence', el.dataset.consequence, true);
+    setField('modal-due-date', el.dataset.dueDate, true);
+    document.getElementById('modal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.add('hidden');
 }
 </script>
 </body>

@@ -137,3 +137,20 @@ def test_web_lists_and_updates_tasks():
     assert updated.status == "done"
 
     crud.delete_all_tasks()
+
+
+def test_tasks_sorted_by_due_date():
+    from datetime import date
+
+    crud.delete_all_tasks()
+    crud.add_task(title="Task B", due_date=date(2024, 10, 1))
+    crud.add_task(title="Task A", due_date=date(2024, 9, 1))
+    crud.add_task(title="Task C")
+
+    client = TestClient(app)
+    resp = client.get("/tasks")
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["tasks"]]
+    assert titles == ["Task A", "Task B", "Task C"]
+
+    crud.delete_all_tasks()

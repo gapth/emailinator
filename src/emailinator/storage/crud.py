@@ -35,7 +35,11 @@ def add_task(
 
 def list_tasks():
     session = SessionLocal()
-    tasks = session.query(Task).all()
+    tasks = (
+        session.query(Task)
+        .order_by(Task.due_date.is_(None), Task.due_date)
+        .all()
+    )
     session.close()
     return tasks
 
