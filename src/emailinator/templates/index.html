@@ -14,7 +14,6 @@
     </style>
 </head>
 <body class="p-4">
-    <h1 class="text-xl font-bold mb-4">Tasks</h1>
     <form method="get" class="space-y-2 mb-4" onsubmit="adjustFilters(this)">
         <div class="space-x-2">
             <label>Due from:
@@ -43,7 +42,7 @@
 
     <div id="tasks" class="space-y-2">
         {% for task in tasks %}
-        <div id="task-{{ task.id }}" class="border p-2 cursor-pointer"
+        <div id="task-{{ task.id }}" class="border p-2 cursor-pointer flex justify-between items-start"
              onclick="openModal(this)"
              data-title="{{ task.title|e }}"
              {% if task.description %}data-description="{{ task.description|e }}"{% endif %}
@@ -54,12 +53,24 @@
              {% if task.student_requirement_level %}data-student-req="{{ task.student_requirement_level|e }}"{% endif %}
              {% if task.due_date %}data-due-date="{{ task.due_date }}"{% endif %}
         >
-            <h3 class="font-semibold">{{ task.title }}</h3>
-            {% if task.due_date %}<p class="text-sm text-gray-500">Due: {{ task.due_date }}</p>{% endif %}
-            {% if task.parent_requirement_level %}<p class="text-sm">Parent requirement: {{ task.parent_requirement_level }}</p>{% endif %}
-            <div class="mt-2 space-x-2">
-                <button onclick="event.stopPropagation()" hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"done"}' hx-target="#task-{{ task.id }}" hx-swap="outerHTML swap:0.3s" class="bg-green-500 text-white px-2 py-1 rounded">Done</button>
-                <button onclick="event.stopPropagation()" hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"dismissed"}' hx-target="#task-{{ task.id }}" hx-swap="outerHTML swap:0.3s" class="bg-gray-500 text-white px-2 py-1 rounded">Dismiss</button>
+            <div class="flex-1">
+                <h3 class="font-semibold">{{ task.title }}</h3>
+                {% if task.due_date %}<p class="text-sm text-gray-500">Due: {{ task.due_date }}</p>{% endif %}
+                {% if task.parent_requirement_level %}<p class="text-sm">Parent requirement: {{ task.parent_requirement_level }}</p>{% endif %}
+            </div>
+            <div class="ml-4 flex flex-col items-end space-y-1">
+                <div class="space-x-2">
+                    <button onclick="event.stopPropagation()" hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"done"}' hx-target="#task-{{ task.id }}" hx-swap="outerHTML swap:0.3s" class="bg-green-500 text-white px-2 py-1 rounded">Done</button>
+                    <button onclick="event.stopPropagation()" hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"dismissed"}' hx-target="#task-{{ task.id }}" hx-swap="outerHTML swap:0.3s" class="bg-gray-500 text-white px-2 py-1 rounded">Dismiss</button>
+                </div>
+                <div class="flex space-x-2 text-sm">
+                    <a onclick="event.stopPropagation()" href="https://calendar.google.com/calendar/render?action=TEMPLATE&text={{ task.title|urlencode }}{% if task.due_date %}&dates={{ task.due_date|replace('-', '') }}/{{ task.due_date|replace('-', '') }}{% endif %}" target="_blank">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google Calendar" class="w-5 h-5">
+                    </a>
+                    <a onclick="event.stopPropagation()" href="data:text/calendar;charset=utf8,BEGIN:VCALENDAR%0AVERSION:2.0%0ABEGIN:VEVENT%0ASUMMARY:{{ task.title|urlencode }}{% if task.due_date %}%0ADTSTART;VALUE=DATE:{{ task.due_date|replace('-', '') }}%0ADTEND;VALUE=DATE:{{ task.due_date|replace('-', '') }}{% endif %}%0AEND:VEVENT%0AEND:VCALENDAR" download="{{ task.title|replace(' ', '_') }}.ics">
+                        <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/apple/apple-original.svg" alt="Apple Calendar" class="w-5 h-5">
+                    </a>
+                </div>
             </div>
         </div>
         {% endfor %}
