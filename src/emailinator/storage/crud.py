@@ -39,6 +39,14 @@ def list_tasks():
     session.close()
     return tasks
 
+
+def delete_all_tasks():
+    """Remove all tasks from the database."""
+    session = SessionLocal()
+    session.query(Task).delete()
+    session.commit()
+    session.close()
+
 def update_task(task_id: int, **kwargs):
     session = SessionLocal()
     task = session.query(Task).get(task_id)
