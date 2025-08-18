@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Tasks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body class="p-4">
+    <h1 class="text-xl font-bold mb-4">Tasks</h1>
+    <form method="get" class="space-y-2 mb-4" onsubmit="adjustFilters(this)">
+        <div class="space-x-2">
+            <label>Due from:
+                <input type="date" name="due_date_from" value="{{ due_date_from if due_date_from else '' }}" class="border px-1" />
+            </label>
+            <label>Due to:
+                <input type="date" name="due_date_to" value="{{ due_date_to if due_date_to else '' }}" class="border px-1" />
+            </label>
+        </div>
+        <div>
+            <label class="block">Parent requirement levels:</label>
+            <select name="parent_requirement_levels" multiple class="border px-1">
+                {% for level in ['NONE','OPTIONAL','VOLUNTEER_OPPORTUNITY','MANDATORY'] %}
+                    <option value="{{ level }}" {% if level in parent_requirement_levels %}selected{% endif %}>{{ level }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" id="include_no_due_date_checkbox" {% if include_no_due_date %}checked{% endif %} /> Include tasks with no due date
+            </label>
+            <input type="hidden" name="include_no_due_date" id="include_no_due_date_hidden" value="{{ 1 if include_no_due_date else 0 }}" />
+        </div>
+        <button type="submit" class="bg-blue-500 text-white px-4 py-1 rounded">Filter</button>
+    </form>
+
+    <div id="tasks" class="space-y-2">
+        {% for task in tasks %}
+        <div id="task-{{ task.id }}" class="border p-2">
+            <h3 class="font-semibold">{{ task.title }}</h3>
+            {% if task.description %}<p>{{ task.description }}</p>{% endif %}
+            {% if task.due_date %}<p class="text-sm text-gray-500">Due: {{ task.due_date }}</p>{% endif %}
+            {% if task.parent_requirement_level %}<p class="text-sm">Parent requirement: {{ task.parent_requirement_level }}</p>{% endif %}
+            <div class="mt-2 space-x-2">
+                <button hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"done"}' hx-swap="outerHTML" class="bg-green-500 text-white px-2 py-1 rounded">Done</button>
+                <button hx-post="/tasks/{{ task.id }}/status" hx-vals='{"status":"dismissed"}' hx-swap="outerHTML" class="bg-gray-500 text-white px-2 py-1 rounded">Dismiss</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+<script>
+function adjustFilters(form) {
+    if (!form.due_date_from.value) {
+        form.due_date_from.removeAttribute('name');
+    }
+    if (!form.due_date_to.value) {
+        form.due_date_to.removeAttribute('name');
+    }
+    document.getElementById('include_no_due_date_hidden').value = document.getElementById('include_no_due_date_checkbox').checked ? '1' : '0';
+    return true;
+}
+</script>
+</body>
+</html>

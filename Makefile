@@ -7,7 +7,7 @@ STAMP := $(VENV)/.requirements.stamp
 # Default target: run the service
 default: run
 
-.PHONY: venv install run test clean dbshell
+.PHONY: venv install run web test clean dbshell
 
 # Create virtual environment if it doesn't exist
 venv:
@@ -28,6 +28,10 @@ install: $(STAMP)
 # Run the FastAPI service
 run: install
 	$(ACTIVATE) && python -m emailinator.main
+
+# Start the web server
+web: install
+	$(ACTIVATE) && uvicorn emailinator.service:app --reload
 
 # Run tests with pytest
 test: install

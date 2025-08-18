@@ -90,6 +90,11 @@ def test_get_tasks():
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A", "Task B", "Task C"}
 
+    resp = client.get("/tasks", params={"include_no_due_date": "0"})
+    assert resp.status_code == 200
+    titles = {t["title"] for t in resp.json()["tasks"]}
+    assert titles == {"Task A", "Task C"}
+
     resp = client.get("/tasks", params={"due_date_to": "2024-09-01"})
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
@@ -111,5 +116,24 @@ def test_get_tasks():
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A"}
+
+    crud.delete_all_tasks()
+
+
+def test_web_lists_and_updates_tasks():
+    from datetime import date
+
+    crud.delete_all_tasks()
+    t = crud.add_task(title="Web Task", due_date=date(2024, 9, 1))
+
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "Web Task" in resp.text
+
+    resp = client.post(f"/tasks/{t.id}/status", data={"status": "done"})
+    assert resp.status_code == 200
+    updated = crud.list_tasks()[0]
+    assert updated.status == "done"
 
     crud.delete_all_tasks()

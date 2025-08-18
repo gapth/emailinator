@@ -2,7 +2,10 @@ import os
 import logging
 from datetime import date
 from typing import List, Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from pathlib import Path
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request, Form
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 from .input.email_reader import read_email_bytes
 from .processing.email_parser import extract_text_from_email
@@ -10,6 +13,7 @@ from .processing import task_extractor, task_updater
 from .storage import crud
 
 app = FastAPI()
+templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 @app.post("/emails")
@@ -66,24 +70,16 @@ def list_tasks(
         raise HTTPException(status_code=400, detail="due_date_from must be before due_date_to")
 
     all_tasks = crud.list_tasks()
+    filtered_models = _filter_tasks(
+        all_tasks,
+        due_date_from,
+        due_date_to,
+        include_no_due_date,
+        parent_requirement_levels,
+    )
     filtered = []
-    for t in all_tasks:
-        if (
-            parent_requirement_levels is not None
-            and t.parent_requirement_level not in parent_requirement_levels
-        ):
-            continue
-
-        if t.due_date is None:
-            if not include_no_due_date:
-                continue
-        else:
-            if due_date_from is not None and t.due_date < due_date_from:
-                continue
-            if due_date_to is not None and t.due_date > due_date_to:
-                continue
-
-        task_dict = {"title": t.title}
+    for t in filtered_models:
+        task_dict = {"id": t.id, "title": t.title, "status": t.status}
         if t.description:
             task_dict["description"] = t.description
         if t.due_date:
@@ -101,3 +97,69 @@ def list_tasks(
         filtered.append(task_dict)
 
     return {"tasks": filtered}
+
+
+def _filter_tasks(
+    tasks,
+    due_date_from: Optional[date],
+    due_date_to: Optional[date],
+    include_no_due_date: bool,
+    parent_requirement_levels: Optional[List[str]],
+):
+    filtered = []
+    for t in tasks:
+        if (
+            parent_requirement_levels is not None
+            and t.parent_requirement_level not in parent_requirement_levels
+        ):
+            continue
+
+        if t.due_date is None:
+            if not include_no_due_date:
+                continue
+        else:
+            if due_date_from is not None and t.due_date < due_date_from:
+                continue
+            if due_date_to is not None and t.due_date > due_date_to:
+                continue
+
+        filtered.append(t)
+
+    return filtered
+
+
+@app.get("/")
+def index(
+    request: Request,
+    due_date_from: Optional[date] = Query(None),
+    due_date_to: Optional[date] = Query(None),
+    include_no_due_date: bool = True,
+    parent_requirement_levels: Optional[List[str]] = Query(None),
+):
+    all_tasks = crud.list_tasks()
+    pending = [t for t in all_tasks if t.status == "pending"]
+    tasks = _filter_tasks(
+        pending,
+        due_date_from,
+        due_date_to,
+        include_no_due_date,
+        parent_requirement_levels,
+    )
+
+    context = {
+        "request": request,
+        "tasks": tasks,
+        "due_date_from": due_date_from.isoformat() if due_date_from else "",
+        "due_date_to": due_date_to.isoformat() if due_date_to else "",
+        "parent_requirement_levels": parent_requirement_levels or [],
+        "include_no_due_date": include_no_due_date,
+    }
+    return templates.TemplateResponse("index.html", context)
+
+
+@app.post("/tasks/{task_id}/status")
+def update_task_status(task_id: int, status: str = Form(...)):
+    task = crud.update_task(task_id, status=status)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return HTMLResponse("")
