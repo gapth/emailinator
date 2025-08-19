@@ -23,7 +23,7 @@ $(STAMP): requirements.txt | $(VENV)/bin/activate
 	$(ACTIVATE) && pip install -r requirements.txt
 	touch $(STAMP)
 
-install: $(STAMP)
+install: venv $(STAMP)
 
 # Run the FastAPI service
 run: install
@@ -34,7 +34,12 @@ web: run
 
 # Run tests with pytest
 test: install
-	$(ACTIVATE) && pytest
+	$(ACTIVATE) && \
+	if [ "$(TESTS)" != "" ]; then \
+		pytest -s $(foreach t,$(TESTS),tests/$(t).py); \
+	else \
+		pytest -s; \
+	fi
 
 # Inspect the database
 dbshell:
