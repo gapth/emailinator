@@ -42,4 +42,4 @@ class User(Base):
     username = Column(String(255), primary_key=True)
     api_key = Column(String(255), nullable=False)
     parent_requirement_levels = Column(Text, nullable=True)
-    include_no_due_date = Column(Boolean, nullable=False, default=True)
+    include_no_due_date = Column(Boolean, nullable=True)

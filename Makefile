@@ -27,11 +27,10 @@ install: $(STAMP)
 
 # Run the FastAPI service
 run: install
-	$(ACTIVATE) && python -m emailinator.main
-
-# Start the web server
-web: install
 	$(ACTIVATE) && uvicorn emailinator.service:app --reload
+
+# Backward-compatible alias
+web: run
 
 # Run tests with pytest
 test: install
