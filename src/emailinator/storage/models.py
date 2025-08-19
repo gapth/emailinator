@@ -7,6 +7,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user = Column(String(255), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(Date, nullable=True)
@@ -31,3 +32,12 @@ class Task(Base):
 
     def __repr__(self):
         return f"<Task id={self.id} title={self.title} status={self.status}>"
+
+
+class User(Base):
+    """Simple user account identified by an API key."""
+
+    __tablename__ = "users"
+
+    username = Column(String(255), primary_key=True)
+    api_key = Column(String(255), nullable=False)

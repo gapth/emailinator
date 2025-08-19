@@ -7,7 +7,7 @@ name = "emailinator"
 version = "0.1.0"
 description = "Email parser that extracts tasks using OpenAI API"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
     "openai>=1.0.0",
     "pytest>=7.0",

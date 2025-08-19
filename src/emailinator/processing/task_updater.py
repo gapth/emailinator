@@ -14,10 +14,10 @@ def is_duplicate(new_task, existing_tasks, threshold=50):
             return True
     return False
 
-def update_tasks_in_db(task_list):
-    """Takes a list of dicts and adds them to DB, deduplicating by fuzzy title match."""
+def update_tasks_in_db(task_list, user: str):
+    """Takes a list of dicts and adds them to DB for a user, deduplicating by fuzzy title match."""
     logger = logging.getLogger("emailinator")
-    existing_tasks = crud.list_tasks()
+    existing_tasks = crud.list_tasks(user)
     added = 0
     for task in task_list:
         due_date_str = task.get("due_date")
@@ -33,6 +33,7 @@ def update_tasks_in_db(task_list):
             continue
 
         crud.add_task(
+            user=user,
             title=task.get("title"),
             description=task.get("description"),
             due_date=due_date,
@@ -41,7 +42,7 @@ def update_tasks_in_db(task_list):
             parent_requirement_level=task.get("parent_requirement_level"),
             student_action=task.get("student_action"),
             student_requirement_level=task.get("student_requirement_level"),
-            status=task.get("status", "pending")
+            status=task.get("status", "pending"),
         )
         added += 1
 

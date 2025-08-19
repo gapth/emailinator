@@ -11,13 +11,14 @@ from .input.email_reader import read_email_bytes
 from .processing.email_parser import extract_text_from_email
 from .processing import task_extractor, task_updater
 from .storage import crud
+from .auth import auth_backend
 
 app = FastAPI()
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 @app.post("/emails")
-async def receive_email(file: UploadFile = File(...)):
+async def receive_email(user: str = Form(...), api_key: str = Form(...), file: UploadFile = File(...)):
     """Accept an email file upload and extract tasks from it."""
     data = await file.read()
     try:
@@ -27,11 +28,13 @@ async def receive_email(file: UploadFile = File(...)):
 
     text = extract_text_from_email(msg)
 
+    _authenticate(user, api_key)
+
     dedup_on_receive = os.getenv("DEDUP_ON_RECEIVE", "0").lower() in {"1", "true", "yes"}
     logger = logging.getLogger("emailinator")
     if dedup_on_receive:
         logger.info("Deduplicating tasks on receive (DEDUP_ON_RECEIVE is enabled)")
-        existing_models = crud.list_tasks()
+        existing_models = crud.list_tasks(user)
         existing = [
             {
                 "title": t.title,
@@ -46,16 +49,18 @@ async def receive_email(file: UploadFile = File(...)):
             for t in existing_models
         ]
         tasks = task_extractor.extract_deduplicated_tasks(text, existing)
-        crud.delete_all_tasks()
+        crud.delete_all_tasks(user)
     else:
         tasks = task_extractor.extract_tasks_from_text(text)
 
-    task_updater.update_tasks_in_db(tasks)
+    task_updater.update_tasks_in_db(tasks, user)
     return {"task_count": len(tasks)}
 
 
 @app.get("/tasks")
 def list_tasks(
+    user: str = Query(...),
+    api_key: str = Query(...),
     due_date_from: Optional[date] = Query(None),
     due_date_to: Optional[date] = Query(None),
     include_no_due_date: bool = True,
@@ -69,7 +74,9 @@ def list_tasks(
     ):
         raise HTTPException(status_code=400, detail="due_date_from must be before due_date_to")
 
-    all_tasks = crud.list_tasks()
+    _authenticate(user, api_key)
+
+    all_tasks = crud.list_tasks(user)
     filtered_models = _filter_tasks(
         all_tasks,
         due_date_from,
@@ -131,12 +138,16 @@ def _filter_tasks(
 @app.get("/")
 def index(
     request: Request,
+    user: str = Query(...),
+    api_key: str = Query(...),
     due_date_from: Optional[date] = Query(None),
     due_date_to: Optional[date] = Query(None),
     include_no_due_date: bool = True,
     parent_requirement_levels: Optional[List[str]] = Query(None),
 ):
-    all_tasks = crud.list_tasks()
+    _authenticate(user, api_key)
+
+    all_tasks = crud.list_tasks(user)
     pending = [t for t in all_tasks if t.status == "pending"]
     tasks = _filter_tasks(
         pending,
@@ -153,13 +164,22 @@ def index(
         "due_date_to": due_date_to.isoformat() if due_date_to else "",
         "parent_requirement_levels": parent_requirement_levels or [],
         "include_no_due_date": include_no_due_date,
+        "user": user,
+        "api_key": api_key,
     }
     return templates.TemplateResponse("index.html", context)
 
 
 @app.post("/tasks/{task_id}/status")
-def update_task_status(task_id: int, status: str = Form(...)):
-    task = crud.update_task(task_id, status=status)
+def update_task_status(task_id: int, user: str = Query(...), api_key: str = Query(...), status: str = Form(...)):
+    _authenticate(user, api_key)
+
+    task = crud.update_task(task_id, user, status=status)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return HTMLResponse("")
+
+
+def _authenticate(user: str, api_key: str):
+    if not auth_backend.authenticate(user, api_key):
+        raise HTTPException(status_code=401, detail="Invalid credentials")

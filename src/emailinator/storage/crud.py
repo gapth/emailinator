@@ -1,10 +1,15 @@
-from .db import SessionLocal, init_db
-from .models import Task
 from datetime import date
+
+from .db import SessionLocal, init_db
+from .models import Task, User
+
 
 init_db()
 
+
 def add_task(
+    *,
+    user: str,
     title: str,
     description: str = None,
     due_date: date = None,  # Accepts Python date object
@@ -13,10 +18,11 @@ def add_task(
     parent_requirement_level: str = None,
     student_action: str = None,
     student_requirement_level: str = None,
-    status: str = "pending"
+    status: str = "pending",
 ):
     session = SessionLocal()
     task = Task(
+        user=user,
         title=title,
         description=description,
         due_date=due_date,
@@ -25,7 +31,7 @@ def add_task(
         parent_requirement_level=parent_requirement_level,
         student_action=student_action,
         student_requirement_level=student_requirement_level,
-        status=status
+        status=status,
     )
     session.add(task)
     session.commit()
@@ -33,10 +39,12 @@ def add_task(
     session.close()
     return task
 
-def list_tasks():
+
+def list_tasks(user: str):
     session = SessionLocal()
     tasks = (
         session.query(Task)
+        .filter(Task.user == user)
         .order_by(Task.due_date.is_(None), Task.due_date)
         .all()
     )
@@ -44,16 +52,20 @@ def list_tasks():
     return tasks
 
 
-def delete_all_tasks():
-    """Remove all tasks from the database."""
+def delete_all_tasks(user: str | None = None):
+    """Remove tasks from the database."""
     session = SessionLocal()
-    session.query(Task).delete()
+    query = session.query(Task)
+    if user is not None:
+        query = query.filter(Task.user == user)
+    query.delete()
     session.commit()
     session.close()
 
-def update_task(task_id: int, **kwargs):
+
+def update_task(task_id: int, user: str, **kwargs):
     session = SessionLocal()
-    task = session.query(Task).get(task_id)
+    task = session.query(Task).filter(Task.id == task_id, Task.user == user).first()
     if not task:
         session.close()
         return None
@@ -63,3 +75,29 @@ def update_task(task_id: int, **kwargs):
     session.refresh(task)
     session.close()
     return task
+
+
+def upsert_user(username: str, api_key: str):
+    """Create or update a user with the given API key."""
+    session = SessionLocal()
+    user = session.get(User, username)
+    if user:
+        user.api_key = api_key
+    else:
+        user = User(username=username, api_key=api_key)
+        session.add(user)
+    session.commit()
+    session.close()
+
+
+def verify_api_key(username: str, api_key: str) -> bool:
+    """Return True if the api_key matches the stored value for the user."""
+    session = SessionLocal()
+    user = (
+        session.query(User)
+        .filter(User.username == username, User.api_key == api_key)
+        .first()
+    )
+    session.close()
+    return user is not None
+

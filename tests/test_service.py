@@ -13,11 +13,21 @@ except ModuleNotFoundError:
     pytest.skip("fastapi not installed", allow_module_level=True)
 
 
+API_KEY = "secret"
+
+
+@pytest.fixture(autouse=True)
+def setup_user():
+    crud.upsert_user("alice", API_KEY)
+    yield
+    crud.delete_all_tasks("alice")
+
+
 def test_post_email(monkeypatch):
     def fake_extract(_):
         return [{"title": "Task A"}]
 
-    def fake_update(tasks):
+    def fake_update(tasks, user):
         fake_update.called = True
 
     fake_update.called = False
@@ -27,7 +37,7 @@ def test_post_email(monkeypatch):
     client = TestClient(app)
     with open("tests/data/simple_email1.eml", "rb") as f:
         files = {"file": ("email.eml", f, "message/rfc822")}
-        response = client.post("/emails", files=files)
+        response = client.post("/emails", data={"user": "alice", "api_key": API_KEY}, files=files)
 
     assert response.status_code == 200
     assert response.json()["task_count"] == 1
@@ -39,7 +49,7 @@ def test_post_email_dedup(monkeypatch):
 
     from types import SimpleNamespace
 
-    def fake_list():
+    def fake_list(user):
         return [SimpleNamespace(title="Existing", description=None, due_date=None,
                                 consequence_if_ignore=None, parent_action=None,
                                 parent_requirement_level=None, student_action=None,
@@ -49,10 +59,10 @@ def test_post_email_dedup(monkeypatch):
         fake_extract.called = True
         return [{"title": "Existing"}, {"title": "Task B"}]
 
-    def fake_delete():
+    def fake_delete(user):
         fake_delete.called = True
 
-    def fake_update(tasks):
+    def fake_update(tasks, user):
         fake_update.called_with = tasks
 
     fake_extract.called = False
@@ -67,7 +77,7 @@ def test_post_email_dedup(monkeypatch):
     client = TestClient(app)
     with open("tests/data/simple_email1.eml", "rb") as f:
         files = {"file": ("email.eml", f, "message/rfc822")}
-        response = client.post("/emails", files=files)
+        response = client.post("/emails", data={"user": "alice", "api_key": API_KEY}, files=files)
 
     assert response.status_code == 200
     assert response.json()["task_count"] == 2
@@ -79,28 +89,28 @@ def test_post_email_dedup(monkeypatch):
 def test_get_tasks():
     from datetime import date
 
-    crud.delete_all_tasks()
-    crud.add_task(title="Task A", due_date=date(2024, 9, 1), parent_requirement_level="MANDATORY")
-    crud.add_task(title="Task B", parent_requirement_level="OPTIONAL")
-    crud.add_task(title="Task C", due_date=date(2024, 9, 2), parent_requirement_level="OPTIONAL")
+    crud.delete_all_tasks("alice")
+    crud.add_task(user="alice", title="Task A", due_date=date(2024, 9, 1), parent_requirement_level="MANDATORY")
+    crud.add_task(user="alice", title="Task B", parent_requirement_level="OPTIONAL")
+    crud.add_task(user="alice", title="Task C", due_date=date(2024, 9, 2), parent_requirement_level="OPTIONAL")
 
     client = TestClient(app)
-    resp = client.get("/tasks")
+    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY})
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A", "Task B", "Task C"}
 
-    resp = client.get("/tasks", params={"include_no_due_date": "0"})
+    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY, "include_no_due_date": "0"})
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A", "Task C"}
 
-    resp = client.get("/tasks", params={"due_date_to": "2024-09-01"})
+    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY, "due_date_to": "2024-09-01"})
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A", "Task B"}
 
-    resp = client.get("/tasks", params={"due_date_from": "2024-09-02"})
+    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY, "due_date_from": "2024-09-02"})
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task B", "Task C"}
@@ -108,6 +118,8 @@ def test_get_tasks():
     resp = client.get(
         "/tasks",
         params={
+            "user": "alice",
+            "api_key": API_KEY,
             "due_date_from": "2024-09-01",
             "due_date_to": "2024-09-02",
             "parent_requirement_levels": ["MANDATORY"],
@@ -117,40 +129,68 @@ def test_get_tasks():
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A"}
 
-    crud.delete_all_tasks()
+    crud.delete_all_tasks("alice")
 
 
 def test_web_lists_and_updates_tasks():
     from datetime import date
 
-    crud.delete_all_tasks()
-    t = crud.add_task(title="Web Task", due_date=date(2024, 9, 1))
+    crud.delete_all_tasks("alice")
+    t = crud.add_task(user="alice", title="Web Task", due_date=date(2024, 9, 1))
 
     client = TestClient(app)
-    resp = client.get("/")
+    resp = client.get("/", params={"user": "alice", "api_key": API_KEY})
     assert resp.status_code == 200
     assert "Web Task" in resp.text
 
-    resp = client.post(f"/tasks/{t.id}/status", data={"status": "done"})
+    resp = client.post(f"/tasks/{t.id}/status", params={"user": "alice", "api_key": API_KEY}, data={"status": "done"})
     assert resp.status_code == 200
-    updated = crud.list_tasks()[0]
+    updated = crud.list_tasks("alice")[0]
     assert updated.status == "done"
 
-    crud.delete_all_tasks()
+    crud.delete_all_tasks("alice")
+
+
+def test_api_key_prevents_impersonation():
+    from emailinator.storage import crud as storage_crud
+
+    storage_crud.upsert_user("bob", "bobkey")
+    storage_crud.delete_all_tasks("alice")
+    storage_crud.delete_all_tasks("bob")
+    storage_crud.add_task(user="alice", title="A1")
+    storage_crud.add_task(user="bob", title="B1")
+
+    client = TestClient(app)
+    # Bob tries to access Alice's tasks
+    resp = client.get("/tasks", params={"user": "alice", "api_key": "bobkey"})
+    assert resp.status_code == 401
+
+    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY})
+    assert resp.status_code == 200
+    titles = {t["title"] for t in resp.json()["tasks"]}
+    assert titles == {"A1"}
+
+    resp = client.get("/tasks", params={"user": "bob", "api_key": "bobkey"})
+    assert resp.status_code == 200
+    titles = {t["title"] for t in resp.json()["tasks"]}
+    assert titles == {"B1"}
+
+    storage_crud.delete_all_tasks("alice")
+    storage_crud.delete_all_tasks("bob")
 
 
 def test_tasks_sorted_by_due_date():
     from datetime import date
 
-    crud.delete_all_tasks()
-    crud.add_task(title="Task B", due_date=date(2024, 10, 1))
-    crud.add_task(title="Task A", due_date=date(2024, 9, 1))
-    crud.add_task(title="Task C")
+    crud.delete_all_tasks("alice")
+    crud.add_task(user="alice", title="Task B", due_date=date(2024, 10, 1))
+    crud.add_task(user="alice", title="Task A", due_date=date(2024, 9, 1))
+    crud.add_task(user="alice", title="Task C")
 
     client = TestClient(app)
-    resp = client.get("/tasks")
+    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY})
     assert resp.status_code == 200
     titles = [t["title"] for t in resp.json()["tasks"]]
     assert titles == ["Task A", "Task B", "Task C"]
 
-    crud.delete_all_tasks()
+    crud.delete_all_tasks("alice")
