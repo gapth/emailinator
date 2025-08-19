@@ -3,9 +3,13 @@ import requests
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Submit an email file to the Emailinator service")
+    parser = argparse.ArgumentParser(
+        description="Submit an email file to the Emailinator service"
+    )
     parser.add_argument("--file", required=True, help="Path to .eml file")
-    parser.add_argument("--url", default="http://localhost:8000/emails", help="Service endpoint URL")
+    parser.add_argument(
+        "--url", default="http://localhost:8000/emails", help="Service endpoint URL"
+    )
     parser.add_argument("--user", required=True, help="User identifier")
     parser.add_argument("--api-key", required=True, help="API key for the user")
     args = parser.parse_args()

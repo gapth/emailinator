@@ -1,5 +1,6 @@
 import sys
-sys.path.append('src')
+
+sys.path.append("src")
 
 from emailinator.input.email_reader import read_email_file
 from emailinator.processing.email_parser import extract_text_from_email

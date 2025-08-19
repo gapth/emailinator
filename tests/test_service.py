@@ -1,5 +1,6 @@
 import sys
-sys.path.append('src')
+
+sys.path.append("src")
 
 import pytest
 
@@ -37,7 +38,9 @@ def test_post_email(monkeypatch):
     client = TestClient(app)
     with open("tests/data/simple_email1.eml", "rb") as f:
         files = {"file": ("email.eml", f, "message/rfc822")}
-        response = client.post("/emails", data={"user": "alice", "api_key": API_KEY}, files=files)
+        response = client.post(
+            "/emails", data={"user": "alice", "api_key": API_KEY}, files=files
+        )
 
     assert response.status_code == 200
     assert response.json()["task_count"] == 1
@@ -50,10 +53,18 @@ def test_post_email_dedup(monkeypatch):
     from types import SimpleNamespace
 
     def fake_list(user):
-        return [SimpleNamespace(title="Existing", description=None, due_date=None,
-                                consequence_if_ignore=None, parent_action=None,
-                                parent_requirement_level=None, student_action=None,
-                                student_requirement_level=None)]
+        return [
+            SimpleNamespace(
+                title="Existing",
+                description=None,
+                due_date=None,
+                consequence_if_ignore=None,
+                parent_action=None,
+                parent_requirement_level=None,
+                student_action=None,
+                student_requirement_level=None,
+            )
+        ]
 
     def fake_extract(email_text, existing):
         fake_extract.called = True
@@ -77,7 +88,9 @@ def test_post_email_dedup(monkeypatch):
     client = TestClient(app)
     with open("tests/data/simple_email1.eml", "rb") as f:
         files = {"file": ("email.eml", f, "message/rfc822")}
-        response = client.post("/emails", data={"user": "alice", "api_key": API_KEY}, files=files)
+        response = client.post(
+            "/emails", data={"user": "alice", "api_key": API_KEY}, files=files
+        )
 
     assert response.status_code == 200
     assert response.json()["task_count"] == 2
@@ -90,9 +103,19 @@ def test_get_tasks():
     from datetime import date
 
     crud.delete_all_tasks("alice")
-    crud.add_task(user="alice", title="Task A", due_date=date(2024, 9, 1), parent_requirement_level="MANDATORY")
+    crud.add_task(
+        user="alice",
+        title="Task A",
+        due_date=date(2024, 9, 1),
+        parent_requirement_level="MANDATORY",
+    )
     crud.add_task(user="alice", title="Task B", parent_requirement_level="OPTIONAL")
-    crud.add_task(user="alice", title="Task C", due_date=date(2024, 9, 2), parent_requirement_level="OPTIONAL")
+    crud.add_task(
+        user="alice",
+        title="Task C",
+        due_date=date(2024, 9, 2),
+        parent_requirement_level="OPTIONAL",
+    )
 
     client = TestClient(app)
     resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY})
@@ -100,17 +123,26 @@ def test_get_tasks():
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A", "Task B", "Task C"}
 
-    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY, "include_no_due_date": "0"})
+    resp = client.get(
+        "/tasks",
+        params={"user": "alice", "api_key": API_KEY, "include_no_due_date": "0"},
+    )
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A", "Task C"}
 
-    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY, "due_date_to": "2024-09-01"})
+    resp = client.get(
+        "/tasks",
+        params={"user": "alice", "api_key": API_KEY, "due_date_to": "2024-09-01"},
+    )
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task A", "Task B"}
 
-    resp = client.get("/tasks", params={"user": "alice", "api_key": API_KEY, "due_date_from": "2024-09-02"})
+    resp = client.get(
+        "/tasks",
+        params={"user": "alice", "api_key": API_KEY, "due_date_from": "2024-09-02"},
+    )
     assert resp.status_code == 200
     titles = {t["title"] for t in resp.json()["tasks"]}
     assert titles == {"Task B", "Task C"}
@@ -143,7 +175,11 @@ def test_web_lists_and_updates_tasks():
     assert resp.status_code == 200
     assert "Web Task" in resp.text
 
-    resp = client.post(f"/tasks/{t.id}/status", params={"user": "alice", "api_key": API_KEY}, data={"status": "done"})
+    resp = client.post(
+        f"/tasks/{t.id}/status",
+        params={"user": "alice", "api_key": API_KEY},
+        data={"status": "done"},
+    )
     assert resp.status_code == 200
     updated = crud.list_tasks("alice")[0]
     assert updated.status == "done"

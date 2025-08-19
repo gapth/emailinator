@@ -18,14 +18,18 @@ class AuthBackend(ABC):
 class APIKeyAuthBackend(AuthBackend):
     """Authenticate using stored API keys."""
 
-    def authenticate(self, user: str, credential: str) -> bool:  # pragma: no cover - trivial
+    def authenticate(
+        self, user: str, credential: str
+    ) -> bool:  # pragma: no cover - trivial
         return crud.verify_api_key(user, credential)
 
 
 class OAuthBackend(AuthBackend):
     """Placeholder for future OAuth providers."""
 
-    def authenticate(self, user: str, credential: str) -> bool:  # pragma: no cover - future
+    def authenticate(
+        self, user: str, credential: str
+    ) -> bool:  # pragma: no cover - future
         raise NotImplementedError("OAuth authentication not implemented")
 
 

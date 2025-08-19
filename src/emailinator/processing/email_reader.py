@@ -1,6 +1,7 @@
 import email
 from pathlib import Path
 
+
 def read_email_file(path: str):
     """Reads a .eml file and returns an email.message.Message object."""
     path_obj = Path(path)

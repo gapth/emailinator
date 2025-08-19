@@ -26,4 +26,3 @@ def _configure_logger() -> None:
 
 
 _configure_logger()
-

@@ -1,5 +1,6 @@
 from sqlalchemy import Integer, String, Text, Date
 
+
 def sqlalchemy_to_jsonschema(model):
     """Convert a SQLAlchemy model into a JSON Schema for OpenAI Responses API."""
     type_map = {
@@ -28,17 +29,14 @@ def sqlalchemy_to_jsonschema(model):
                 "items": {
                     "type": "object",
                     "properties": properties,
-                    "required": required_fields
-                }
+                    "required": required_fields,
+                },
             }
         },
-        "required": ["tasks"]
+        "required": ["tasks"],
     }
 
     return {
         "type": "json_schema",
-        "json_schema": {
-            "name": f"{model.__tablename__}_list",
-            "schema": schema
-        }
+        "json_schema": {"name": f"{model.__tablename__}_list", "schema": schema},
     }

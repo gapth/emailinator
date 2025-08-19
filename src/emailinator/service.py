@@ -18,7 +18,9 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 @app.post("/emails")
-async def receive_email(user: str = Form(...), api_key: str = Form(...), file: UploadFile = File(...)):
+async def receive_email(
+    user: str = Form(...), api_key: str = Form(...), file: UploadFile = File(...)
+):
     """Accept an email file upload and extract tasks from it."""
     data = await file.read()
     try:
@@ -30,7 +32,11 @@ async def receive_email(user: str = Form(...), api_key: str = Form(...), file: U
 
     _authenticate(user, api_key)
 
-    dedup_on_receive = os.getenv("DEDUP_ON_RECEIVE", "0").lower() in {"1", "true", "yes"}
+    dedup_on_receive = os.getenv("DEDUP_ON_RECEIVE", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     logger = logging.getLogger("emailinator")
     if dedup_on_receive:
         logger.info("Deduplicating tasks on receive (DEDUP_ON_RECEIVE is enabled)")
@@ -72,7 +78,9 @@ def list_tasks(
         and due_date_to is not None
         and due_date_from > due_date_to
     ):
-        raise HTTPException(status_code=400, detail="due_date_from must be before due_date_to")
+        raise HTTPException(
+            status_code=400, detail="due_date_from must be before due_date_to"
+        )
 
     _authenticate(user, api_key)
 
@@ -201,7 +209,12 @@ def set_preferences(
 
 
 @app.post("/tasks/{task_id}/status")
-def update_task_status(task_id: int, user: str = Query(...), api_key: str = Query(...), status: str = Form(...)):
+def update_task_status(
+    task_id: int,
+    user: str = Query(...),
+    api_key: str = Query(...),
+    status: str = Form(...),
+):
     _authenticate(user, api_key)
 
     task = crud.update_task(task_id, user, status=status)

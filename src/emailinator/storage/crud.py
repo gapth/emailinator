@@ -136,4 +136,3 @@ def update_user_preferences(
     session.commit()
     session.close()
     return True
-

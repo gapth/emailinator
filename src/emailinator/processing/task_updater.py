@@ -5,6 +5,7 @@ from fuzzywuzzy import fuzz
 
 from ..storage import crud
 
+
 def is_duplicate(new_task, existing_tasks, threshold=50):
     new_title = new_task.get("title", "").lower()
     for task in existing_tasks:
@@ -13,6 +14,7 @@ def is_duplicate(new_task, existing_tasks, threshold=50):
         if score >= threshold:
             return True
     return False
+
 
 def update_tasks_in_db(task_list, user: str):
     """Takes a list of dicts and adds them to DB for a user, deduplicating by fuzzy title match."""
