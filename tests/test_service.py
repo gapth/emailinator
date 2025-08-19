@@ -136,7 +136,7 @@ def test_web_lists_and_updates_tasks():
     from datetime import date
 
     crud.delete_all_tasks("alice")
-    t = crud.add_task(user="alice", title="Web Task", due_date=date(2024, 9, 1))
+    t = crud.add_task(user="alice", title="Web Task", due_date=date.today())
 
     client = TestClient(app)
     resp = client.get("/", params={"user": "alice", "api_key": API_KEY})

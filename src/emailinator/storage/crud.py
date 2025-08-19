@@ -1,4 +1,5 @@
 from datetime import date
+import json
 
 from .db import SessionLocal, init_db
 from .models import Task, User
@@ -100,4 +101,39 @@ def verify_api_key(username: str, api_key: str) -> bool:
     )
     session.close()
     return user is not None
+
+
+def get_user_preferences(username: str):
+    """Return stored user preferences or defaults."""
+    session = SessionLocal()
+    user = session.get(User, username)
+    prefs = {
+        "include_no_due_date": True,
+        "parent_requirement_levels": [],
+    }
+    if user:
+        if user.include_no_due_date is not None:
+            prefs["include_no_due_date"] = user.include_no_due_date
+        if user.parent_requirement_levels:
+            prefs["parent_requirement_levels"] = json.loads(
+                user.parent_requirement_levels
+            )
+    session.close()
+    return prefs
+
+
+def update_user_preferences(
+    username: str, include_no_due_date: bool, parent_requirement_levels: list[str]
+):
+    """Update stored user preferences."""
+    session = SessionLocal()
+    user = session.get(User, username)
+    if not user:
+        session.close()
+        return False
+    user.include_no_due_date = include_no_due_date
+    user.parent_requirement_levels = json.dumps(parent_requirement_levels)
+    session.commit()
+    session.close()
+    return True
 

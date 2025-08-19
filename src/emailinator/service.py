@@ -1,6 +1,6 @@
 import os
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Optional
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request, Form
@@ -142,10 +142,25 @@ def index(
     api_key: str = Query(...),
     due_date_from: Optional[date] = Query(None),
     due_date_to: Optional[date] = Query(None),
-    include_no_due_date: bool = True,
+    include_no_due_date: Optional[bool] = None,
     parent_requirement_levels: Optional[List[str]] = Query(None),
 ):
     _authenticate(user, api_key)
+    prefs = crud.get_user_preferences(user)
+    if include_no_due_date is None:
+        include_no_due_date = prefs["include_no_due_date"]
+    if parent_requirement_levels is None:
+        parent_requirement_levels = prefs["parent_requirement_levels"]
+    levels_filter = parent_requirement_levels if parent_requirement_levels else None
+
+    if (due_date_from is None) != (due_date_to is None):
+        due_date_from = None
+        due_date_to = None
+
+    if due_date_from is None and due_date_to is None:
+        today = date.today()
+        due_date_from = today
+        due_date_to = today + timedelta(days=7)
 
     all_tasks = crud.list_tasks(user)
     pending = [t for t in all_tasks if t.status == "pending"]
@@ -154,7 +169,7 @@ def index(
         due_date_from,
         due_date_to,
         include_no_due_date,
-        parent_requirement_levels,
+        levels_filter,
     )
 
     context = {
@@ -168,6 +183,21 @@ def index(
         "api_key": api_key,
     }
     return templates.TemplateResponse("index.html", context)
+
+
+@app.post("/user/preferences")
+def set_preferences(
+    user: str = Query(...),
+    api_key: str = Query(...),
+    include_no_due_date: int = Form(...),
+    parent_requirement_levels: List[str] = Form([]),
+):
+    """Update stored user preferences."""
+    _authenticate(user, api_key)
+    crud.update_user_preferences(
+        user, bool(include_no_due_date), parent_requirement_levels
+    )
+    return {"status": "ok"}
 
 
 @app.post("/tasks/{task_id}/status")
