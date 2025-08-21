@@ -76,7 +76,13 @@ The response JSON matches the `tasks_list` format used throughout the project.
 
 ## Supabase inbound-email function
 
-The repository includes a Supabase Edge Function at `supabase/functions/inbound-email` that inserts raw inbound messages into the `raw_emails` table.  The function authenticates with the caller's Supabase JWT.
+The repository includes a Supabase Edge Function at `supabase/functions/inbound-email` that inserts raw inbound messages into the `raw_emails` table and processes them through the OpenAI API to extract deduplicated tasks.  The function authenticates with the caller's Supabase JWT.
+
+Before deploying, store your OpenAI key as a Supabase secret:
+
+```bash
+supabase secrets set OPENAI_API_KEY=your-key
+```
 
 ```bash
 supabase functions deploy inbound-email
