@@ -6,7 +6,6 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!; // server-side 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
 type InboundPayload = {
-  user_id?: string;              // UUID of auth.users (preferred)
   from_email?: string;
   to_email?: string;
   subject?: string;
@@ -18,22 +17,17 @@ type InboundPayload = {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  // Simple shared-secret auth (set this in your provider)
-  const secret = req.headers.get("x-emailinator-secret");
-  if (!secret || secret !== Deno.env.get("EMAILINATOR_INBOUND_SECRET")) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  // Authenticate using the caller's Supabase JWT
+  const auth = req.headers.get("authorization")?.split("Bearer ")[1];
+  if (!auth) return new Response("Unauthorized", { status: 401 });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser(auth);
+  if (authError || !user) return new Response("Unauthorized", { status: 401 });
 
   try {
     const payload = await req.json() as InboundPayload;
 
-    // Derive user_id if you encode it in the "to" local part: u_<uuid>@in.emailinator.app
-    let user_id = payload.user_id;
-    if (!user_id && payload.to_email) {
-      const local = payload.to_email.split("@")[0];
-      if (local.startsWith("u_")) user_id = local.slice(2);
-    }
-    if (!user_id) return new Response("Missing user_id", { status: 400 });
+    const user_id = user.id;
 
     const { error } = await supabase.from("raw_emails").insert({
       user_id,

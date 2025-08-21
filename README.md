@@ -73,3 +73,29 @@ http://localhost:8000/tasks?user=alice&api_key=secret&due_date_to=2024-09-01
 ```
 
 The response JSON matches the `tasks_list` format used throughout the project.
+
+## Supabase inbound-email function
+
+The repository includes a Supabase Edge Function at `supabase/functions/inbound-email` that inserts raw inbound messages into the `raw_emails` table.  The function authenticates with the caller's Supabase JWT.
+
+```bash
+supabase functions deploy inbound-email
+```
+
+When calling the function, pass the user's access token in the `Authorization` header:
+
+```bash
+curl -i -X POST "$SUPABASE_URL/functions/v1/inbound-email" \\
+  -H "Authorization: Bearer $ACCESS_TOKEN" \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "from_email":"teacher@school.org",
+    "to_email":"u_00000000-0000-0000-0000-000000000000@in.emailinator.app",
+    "subject":"Tie Ceremony details",
+    "text_body":"Ceremony on Sept 12 at 5pm. Parents attend.",
+    "provider_meta":{"source":"postmark"}
+  }'
+```
+
+The Edge Function uses the service role key internally so it can insert rows even when Row Level Security (RLS) is enabled on the database.
+
