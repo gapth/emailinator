@@ -1,14 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
-import { createClient } from "jsr:@supabase/supabase-js@2";
-
-// Supabase client (service role for server-side usage)
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
-
-// OpenAI
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 const MODEL_NAME = "gpt-4.1-mini";
+const INPUT_USD_PER_TOKEN = 0.4e-6;
+const OUTPUT_USD_PER_TOKEN = 1.6e-6;
 
 const TASK_SCHEMA = {
   name: "tasks_list",
@@ -105,6 +98,8 @@ const TASK_SCHEMA = {
 };
 
 async function extractDeduplicatedTasks(
+  fetchFn: typeof fetch,
+  openAiApiKey: string,
   emailText: string,
   existingTasks: Record<string, unknown>[],
 ): Promise<Record<string, unknown>[]> {
@@ -130,11 +125,11 @@ async function extractDeduplicatedTasks(
     response_format: { type: "json_schema", json_schema: TASK_SCHEMA },
   };
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  const resp = await fetchFn("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${openAiApiKey}`,
     },
     body: JSON.stringify(body),
   });
@@ -144,6 +139,16 @@ async function extractDeduplicatedTasks(
   }
 
   const data = await resp.json();
+
+  // Log API cost similar to Python version; goes to stdout locally and to Supabase logs in production
+  const promptTokens = data?.usage?.prompt_tokens ?? 0;
+  const completionTokens = data?.usage?.completion_tokens ?? 0;
+  const apiCost =
+    promptTokens * INPUT_USD_PER_TOKEN + completionTokens * OUTPUT_USD_PER_TOKEN;
+  console.info(
+    `[inbound-email] API cost (USD): ${apiCost.toFixed(6)} (prompt=${promptTokens}, completion=${completionTokens})`,
+  );
+
   const content = data.choices?.[0]?.message?.content ?? "{}";
   return JSON.parse(content).tasks ?? [];
 }
@@ -157,83 +162,101 @@ type InboundPayload = {
   provider_meta?: Record<string, any>;
 };
 
-Deno.serve(async (req) => {
-  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+export interface Deps {
+  supabase: any;
+  fetch: typeof fetch;
+  openAiApiKey: string;
+}
 
-  // Authenticate using the caller's Supabase JWT
-  const auth = req.headers.get("authorization")?.split("Bearer ")[1];
-  if (!auth) return new Response("Unauthorized", { status: 401 });
+export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
+  return async function handler(req: Request): Promise<Response> {
+    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser(auth);
-  if (authError || !user) return new Response("Unauthorized", { status: 401 });
+    // Authenticate using the caller's Supabase JWT
+    const auth = req.headers.get("authorization")?.split("Bearer ")[1];
+    if (!auth) return new Response("Unauthorized", { status: 401 });
 
-  try {
-    const payload = await req.json() as InboundPayload;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(auth);
+    if (authError || !user) return new Response("Unauthorized", { status: 401 });
 
-    const user_id = user.id;
-    // Store raw email and grab ID for task linking
-    const { data: rawData, error: rawError } = await supabase
-      .from("raw_emails")
-      .insert({
-        user_id,
-        from_email: payload.from_email ?? null,
-        to_email: payload.to_email ?? null,
-        subject: payload.subject ?? null,
-        text_body: payload.text_body ?? null,
-        html_body: payload.html_body ?? null,
-        provider_meta: payload.provider_meta ?? {},
-      })
-      .select("id")
-      .single();
+    try {
+      const payload = await req.json() as InboundPayload;
 
-    if (rawError) return new Response(rawError.message, { status: 500 });
+      const user_id = user.id;
+      // Store raw email and grab ID for task linking
+      const { data: rawData, error: rawError } = await supabase
+        .from("raw_emails")
+        .insert({
+          user_id,
+          from_email: payload.from_email ?? null,
+          to_email: payload.to_email ?? null,
+          subject: payload.subject ?? null,
+          text_body: payload.text_body ?? null,
+          html_body: payload.html_body ?? null,
+          provider_meta: payload.provider_meta ?? {},
+        })
+        .select("id")
+        .single();
 
-    const emailText = payload.text_body ?? payload.html_body ?? "";
+      if (rawError) return new Response(rawError.message, { status: 500 });
 
-    const { data: existing, error: existingError } = await supabase
-      .from("tasks")
-      .select(
-        "title, description, due_date, consequence_if_ignore, parent_action, parent_requirement_level, student_action, student_requirement_level",
-      )
-      .eq("user_id", user_id);
+      const emailText = payload.text_body ?? payload.html_body ?? "";
 
-    if (existingError) return new Response(existingError.message, { status: 500 });
-
-    const tasks = await extractDeduplicatedTasks(emailText, existing ?? []);
-
-    // Replace existing tasks with deduplicated list
-    const { error: delError } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("user_id", user_id);
-    if (delError) return new Response(delError.message, { status: 500 });
-
-    if (tasks.length > 0) {
-      const rows = tasks.map((t: any) => ({
-        user_id,
-        email_id: rawData.id,
-        title: t.title,
-        description: t.description ?? null,
-        due_date: t.due_date ?? null,
-        consequence_if_ignore: t.consequence_if_ignore ?? null,
-        parent_action: t.parent_action ?? null,
-        parent_requirement_level: t.parent_requirement_level ?? null,
-        student_action: t.student_action ?? null,
-        student_requirement_level: t.student_requirement_level ?? null,
-        status: "PENDING",
-      }));
-
-      const { error: insertError } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("tasks")
-        .insert(rows);
-      if (insertError) return new Response(insertError.message, { status: 500 });
-    }
+        .select(
+          "title, description, due_date, consequence_if_ignore, parent_action, parent_requirement_level, student_action, student_requirement_level",
+        )
+        .eq("user_id", user_id);
 
-    return new Response(JSON.stringify({ task_count: tasks.length }), {
-      headers: { "content-type": "application/json" },
-      status: 200,
-    });
-  } catch (e) {
-    return new Response(`Bad Request: ${e}`, { status: 400 });
-  }
-});
+      if (existingError) return new Response(existingError.message, { status: 500 });
+
+      const tasks = await extractDeduplicatedTasks(fetch, openAiApiKey, emailText, existing ?? []);
+
+      // Replace existing tasks with deduplicated list
+      const { error: delError } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("user_id", user_id);
+      if (delError) return new Response(delError.message, { status: 500 });
+
+      if (tasks.length > 0) {
+        const rows = tasks.map((t: any) => ({
+          user_id,
+          email_id: rawData.id,
+          title: t.title,
+          description: t.description ?? null,
+          due_date: t.due_date ?? null,
+          consequence_if_ignore: t.consequence_if_ignore ?? null,
+          parent_action: t.parent_action ?? null,
+          parent_requirement_level: t.parent_requirement_level ?? null,
+          student_action: t.student_action ?? null,
+          student_requirement_level: t.student_requirement_level ?? null,
+          status: "PENDING",
+        }));
+
+        const { error: insertError } = await supabase
+          .from("tasks")
+          .insert(rows);
+        if (insertError) return new Response(insertError.message, { status: 500 });
+      }
+
+      return new Response(JSON.stringify({ task_count: tasks.length }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    } catch (e) {
+      return new Response(`Bad Request: ${e}`, { status: 400 });
+    }
+  };
+}
+
+if (import.meta.main) {
+  const { createClient } = await import("jsr:@supabase/supabase-js@2");
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+  const handler = createHandler({ supabase, fetch, openAiApiKey: OPENAI_API_KEY });
+  Deno.serve(handler);
+}

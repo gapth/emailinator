@@ -25,3 +25,10 @@ ENV/
 tasks.db
 
 manual_eval
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

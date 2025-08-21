@@ -1,0 +1,19 @@
+{
+  "name": "emailinator",
+  "version": "1.0.0",
+  "description": "A service that extracts tasks from emailed announcements. It exposes a FastAPI endpoint to receive `.eml` files and updates a local SQLite database.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test:inbound-email": "tsx supabase/functions/inbound-email/index.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}

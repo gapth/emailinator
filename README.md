@@ -105,3 +105,14 @@ curl -i -X POST "$SUPABASE_URL/functions/v1/inbound-email" \\
 
 The Edge Function uses the service role key internally so it can insert rows even when Row Level Security (RLS) is enabled on the database.
 
+### Testing the inbound-email function
+
+Install the JavaScript dev dependencies and run the tests with `tsx`:
+
+```bash
+npm install
+npm run test:inbound-email
+```
+
+`tsx` executes the TypeScript tests without requiring Node's experimental flags, allowing them to run on Node 20 and later.
+
