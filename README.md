@@ -103,6 +103,19 @@ curl -i -X POST "$SUPABASE_URL/functions/v1/inbound-email" \\
   }'
 ```
 
+#### Sending a local `.eml` file
+
+Use the helper CLI to send a raw email file to the same function:
+
+```bash
+python -m emailinator.send_to_supabase \
+  --file path/to/email.eml \
+  --access-token "$ACCESS_TOKEN" \
+  --url "$SUPABASE_URL/functions/v1/inbound-email"
+```
+
+The script parses the email and posts its contents as JSON.
+
 The Edge Function uses the service role key internally so it can insert rows even when Row Level Security (RLS) is enabled on the database.
 
 ### Testing the inbound-email function

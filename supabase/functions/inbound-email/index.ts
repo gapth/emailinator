@@ -2,6 +2,7 @@
 const MODEL_NAME = "gpt-4.1-mini";
 const INPUT_USD_PER_TOKEN = 0.4e-6;
 const OUTPUT_USD_PER_TOKEN = 1.6e-6;
+const TEXT_BODY_MIN_RATIO_OF_HTML = 0.3; // Use text/plain only if it's at least 30% of the HTML length
 
 const TASK_SCHEMA = {
   name: "tasks_list",
@@ -102,6 +103,7 @@ async function extractDeduplicatedTasks(
   openAiApiKey: string,
   emailText: string,
   existingTasks: Record<string, unknown>[],
+  userId: string, // added
 ): Promise<Record<string, unknown>[]> {
   const prompt =
     "You are a careful assistant for a busy parent.\n" +
@@ -140,13 +142,13 @@ async function extractDeduplicatedTasks(
 
   const data = await resp.json();
 
-  // Log API cost similar to Python version; goes to stdout locally and to Supabase logs in production
+  // Log API cost with user id
   const promptTokens = data?.usage?.prompt_tokens ?? 0;
   const completionTokens = data?.usage?.completion_tokens ?? 0;
   const apiCost =
     promptTokens * INPUT_USD_PER_TOKEN + completionTokens * OUTPUT_USD_PER_TOKEN;
   console.info(
-    `[inbound-email] API cost (USD): ${apiCost.toFixed(6)} (prompt=${promptTokens}, completion=${completionTokens})`,
+    `[inbound-email] user=${userId} API cost (USD): ${apiCost.toFixed(6)} (prompt=${promptTokens}, completion=${completionTokens})`,
   );
 
   const content = data.choices?.[0]?.message?.content ?? "{}";
@@ -200,7 +202,15 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
 
       if (rawError) return new Response(rawError.message, { status: 500 });
 
-      const emailText = payload.text_body ?? payload.html_body ?? "";
+      // Prefer text/plain unless it's likely a short placeholder compared to HTML.
+      // Some emails stuff a short placeholder in the text/plain part; use HTML instead in that case.
+      // Use the length as a rule-of-thumb to detect placeholder text/plain part.
+      const plain = payload.text_body ?? "";
+      const html = payload.html_body ?? "";
+      const emailText =
+        plain && (html.length === 0 || plain.length >= TEXT_BODY_MIN_RATIO_OF_HTML * html.length)
+          ? plain
+          : (html || "");
 
       const { data: existing, error: existingError } = await supabase
         .from("tasks")
@@ -211,7 +221,17 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
 
       if (existingError) return new Response(existingError.message, { status: 500 });
 
-      const tasks = await extractDeduplicatedTasks(fetch, openAiApiKey, emailText, existing ?? []);
+      const existingCount = Array.isArray(existing) ? existing.length : 0;
+      console.info(`[inbound-email] user=${user_id} existing_tasks=${existingCount}`);
+
+      const tasks = await extractDeduplicatedTasks(
+        fetch,
+        openAiApiKey,
+        emailText,
+        existing ?? [],
+        user_id, // pass user id for logging
+      );
+      console.info(`[inbound-email] user=${user_id} deduped_tasks=${tasks.length}`);
 
       // Replace existing tasks with deduplicated list
       const { error: delError } = await supabase
