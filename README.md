@@ -74,6 +74,15 @@ http://localhost:8000/tasks?user=alice&api_key=secret&due_date_to=2024-09-01
 
 The response JSON matches the `tasks_list` format used throughout the project.
 
+## Supabase web UI
+
+If you store tasks in Supabase, the service can serve a simple web
+interface backed directly by Supabase.  Configure the Supabase project
+URL and anonymous key in the environment variables `SUPABASE_URL` and
+`SUPABASE_ANON_KEY`, then navigate to `/supabase` in the running
+service.  The page prompts for an email and password and displays the
+tasks for the signed-in user.
+
 ## Supabase inbound-email function
 
 The repository includes a Supabase Edge Function at `supabase/functions/inbound-email` that inserts raw inbound messages into the `raw_emails` table and processes them through the OpenAI API to extract deduplicated tasks.  The function authenticates with the caller's Supabase JWT.
@@ -128,4 +137,26 @@ npm run test:inbound-email
 ```
 
 `tsx` executes the TypeScript tests without requiring Node's experimental flags, allowing them to run on Node 20 and later.
+
+## Updating the Supabase database
+
+Run the SQL migrations to keep your database schema in sync with the
+application.  For a local Supabase instance, start the stack and reset
+the database which applies all migrations:
+
+```bash
+supabase start
+supabase db reset
+```
+
+To apply the same migrations to your hosted Supabase project, push them
+using the project reference (find it in the Supabase dashboard):
+
+```bash
+supabase db push --project-ref your-project-ref
+```
+
+These commands incorporate the new `preferences` columns
+(`parent_requirement_levels` and `include_no_due_date`) and remove the
+obsolete fields.
 

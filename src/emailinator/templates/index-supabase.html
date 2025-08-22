@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Tasks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+    .task-removing {
+        opacity: 0;
+        transform: translateX(100%);
+        transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+    }
+    </style>
+</head>
+<body class="p-4">
+<div id="login" class="max-w-sm mx-auto">
+    <h2 class="text-xl font-bold mb-2">Sign In</h2>
+    <form onsubmit="signIn(event)" class="space-y-2">
+        <input type="email" id="login_email" placeholder="Email" class="border px-2 py-1 w-full" required />
+        <input type="password" id="login_password" placeholder="Password" class="border px-2 py-1 w-full" required />
+        <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded w-full">Sign In</button>
+    </form>
+</div>
+
+<div id="app" class="hidden">
+    <form id="filters" class="space-y-2 mb-4" onsubmit="event.preventDefault(); loadTasks();">
+        <div class="flex flex-col space-y-2">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <label>Due:</label>
+                    <input type="text" id="due_date_range" class="border px-1 w-72" />
+                </div>
+                <span id="user-email" class="text-sm"></span>
+            </div>
+            <div class="flex items-center justify-between">
+                <button type="button" class="bg-gray-500 text-white px-2 py-1 rounded" onclick="openSettings()">Settings</button>
+                <button type="button" class="text-sm underline" onclick="signOut()">Sign out</button>
+            </div>
+        </div>
+        <input type="hidden" name="due_date_from" id="due_date_from" />
+        <input type="hidden" name="due_date_to" id="due_date_to" />
+        <div id="level_inputs"></div>
+        <input type="hidden" id="include_no_due_date_hidden" value="1" />
+    </form>
+
+    <div id="tasks" class="space-y-2"></div>
+
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" onclick="if (event.target === this) closeModal()">
+        <div class="bg-white p-4 rounded w-11/12 max-w-md">
+            <h2 class="text-xl font-bold mb-2" id="modal-title"></h2>
+            <p id="modal-description" class="mb-2 hidden"></p>
+            <p id="modal-parent-action" class="mb-2 hidden"><strong>Parent action:</strong> <span></span></p>
+            <p id="modal-parent-requirement" class="mb-2 hidden"><strong>Parent requirement:</strong> <span></span></p>
+            <p id="modal-student-action" class="mb-2 hidden"><strong>Student action:</strong> <span></span></p>
+            <p id="modal-student-requirement" class="mb-2 hidden"><strong>Student requirement:</strong> <span></span></p>
+            <p id="modal-consequence" class="mb-2 hidden"><strong>Consequence if ignored:</strong> <span></span></p>
+            <p id="modal-due-date" class="mb-2 hidden"><strong>Due:</strong> <span></span></p>
+            <div class="text-right">
+                <button class="mt-2 bg-blue-500 text-white px-3 py-1 rounded" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" onclick="if (event.target === this) closeSettings()">
+        <div class="bg-white p-4 rounded w-11/12 max-w-md">
+            <h2 class="text-xl font-bold mb-2">Settings</h2>
+            <div class="mb-2">
+                <label class="block">Parent requirement levels:</label>
+                <select id="settings_parent_requirement_levels" multiple class="border px-1 w-full">
+                    <option value="NONE">NONE</option>
+                    <option value="OPTIONAL">OPTIONAL</option>
+                    <option value="VOLUNTEER">VOLUNTEER</option>
+                    <option value="MANDATORY">MANDATORY</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label>
+                    <input type="checkbox" id="settings_include_no_due_date" checked /> Include tasks with no due date
+                </label>
+            </div>
+            <div class="text-right space-x-2">
+                <button class="bg-gray-500 text-white px-3 py-1 rounded" onclick="closeSettings()">Cancel</button>
+                <button class="bg-blue-500 text-white px-3 py-1 rounded" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const SUPABASE_URL = {{ supabase_url|tojson }};
+const SUPABASE_ANON_KEY = {{ supabase_anon_key|tojson }};
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let appInitialized = false;
+let currentUser = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        await showApp(session.user);
+    } else {
+        showLogin();
+    }
+
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+            await showApp(session.user);
+        } else if (event === 'SIGNED_OUT') {
+            showLogin();
+        }
+    });
+});
+
+window.signIn = async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('login_email').value;
+    const password = document.getElementById('login_password').value;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) alert(error.message);
+};
+
+window.signOut = async function() {
+    const { error } = await supabase.auth.signOut();
+    if (error) alert(error.message);
+};
+
+async function showApp(user) {
+    document.getElementById('login').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('user-email').textContent = user.email;
+    currentUser = user;
+    if (!appInitialized) {
+        await initApp();
+        appInitialized = true;
+    } else {
+        await loadSettings();
+        loadTasks();
+    }
+}
+
+function showLogin() {
+    document.getElementById('login').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('user-email').textContent = '';
+    appInitialized = false;
+    currentUser = null;
+}
+
+async function initApp() {
+    const fromInput = document.getElementById('due_date_from');
+    const toInput = document.getElementById('due_date_to');
+    const today = new Date();
+    const week = new Date();
+    week.setDate(today.getDate() + 7);
+    fromInput.value = today.toISOString().slice(0,10);
+    toInput.value = week.toISOString().slice(0,10);
+    flatpickr('#due_date_range', {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        defaultDate: [fromInput.value, toInput.value],
+        onClose: function(selectedDates, dateStr, instance) {
+            if (selectedDates.length === 2) {
+                fromInput.value = instance.formatDate(selectedDates[0], 'Y-m-d');
+                toInput.value = instance.formatDate(selectedDates[1], 'Y-m-d');
+                loadTasks();
+            }
+        }
+    });
+    await loadSettings();
+    loadTasks();
+}
+
+async function loadSettings() {
+    if (!currentUser) return;
+    const { data, error } = await supabase
+        .from('preferences')
+        .select('parent_requirement_levels, include_no_due_date')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+    if (error) {
+        console.error('loadSettings error', error);
+        return;
+    }
+    console.log('Loaded settings', data);
+    const levels = data?.parent_requirement_levels || [];
+    const include = data?.include_no_due_date !== false;
+    const select = document.getElementById('settings_parent_requirement_levels');
+    for (const opt of select.options) {
+        opt.selected = levels.includes(opt.value);
+    }
+    document.getElementById('settings_include_no_due_date').checked = include;
+    setHiddenLevels(levels);
+    document.getElementById('include_no_due_date_hidden').value = include ? '1' : '0';
+}
+
+function setHiddenLevels(levels) {
+    const container = document.getElementById('level_inputs');
+    container.innerHTML = '';
+    for (const lvl of levels) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'parent_requirement_levels';
+        input.value = lvl;
+        container.appendChild(input);
+    }
+}
+
+window.saveSettings = async function() {
+    if (!currentUser) return;
+    const select = document.getElementById('settings_parent_requirement_levels');
+    const levels = Array.from(select.selectedOptions).map(o => o.value);
+    const include = document.getElementById('settings_include_no_due_date').checked;
+    console.log('Saving settings', { levels, include });
+    const { data, error } = await supabase.from('preferences').upsert({
+        user_id: currentUser.id,
+        parent_requirement_levels: levels,
+        include_no_due_date: include,
+    });
+    console.log('Save result', { data, error });
+    if (error) {
+        alert(error.message);
+        return;
+    }
+    setHiddenLevels(levels);
+    document.getElementById('include_no_due_date_hidden').value = include ? '1' : '0';
+    closeSettings();
+    loadTasks();
+};
+
+window.loadTasks = async function() {
+    const from = document.getElementById('due_date_from').value;
+    const to = document.getElementById('due_date_to').value;
+    const includeNoDue = document.getElementById('include_no_due_date_hidden').value === '1';
+    const levelInputs = document.querySelectorAll('input[name="parent_requirement_levels"]');
+    const levels = Array.from(levelInputs).map(i => i.value);
+    let query = supabase.from('tasks').select('id,title,description,due_date,consequence_if_ignore,parent_action,parent_requirement_level,student_action,student_requirement_level').eq('status','PENDING');
+    if (levels.length) {
+        query = query.in('parent_requirement_level', levels);
+    }
+    if (from && to) {
+        if (includeNoDue) {
+            query = query.or(`due_date.is.null,and(due_date.gte.${from},due_date.lte.${to})`);
+        } else {
+            query = query.gte('due_date', from).lte('due_date', to);
+        }
+    } else if (!includeNoDue) {
+        query = query.not('due_date','is',null);
+    }
+    const { data: tasks, error } = await query.order('due_date', { ascending: true });
+    if (error) {
+        console.error(error);
+        return;
+    }
+    const container = document.getElementById('tasks');
+    container.innerHTML = '';
+    for (const task of tasks) {
+        container.appendChild(renderTask(task));
+    }
+};
+
+function renderTask(task) {
+    const div = document.createElement('div');
+    div.id = `task-${task.id}`;
+    div.className = 'border p-2 cursor-pointer flex justify-between items-start';
+    div.onclick = function() { openModal(div); };
+    div.dataset.title = task.title;
+    if (task.description) div.dataset.description = task.description;
+    if (task.consequence_if_ignore) div.dataset.consequence = task.consequence_if_ignore;
+    if (task.parent_action) div.dataset.parentAction = task.parent_action;
+    if (task.parent_requirement_level) div.dataset.parentReq = task.parent_requirement_level;
+    if (task.student_action) div.dataset.studentAction = task.student_action;
+    if (task.student_requirement_level) div.dataset.studentReq = task.student_requirement_level;
+    if (task.due_date) div.dataset.dueDate = task.due_date;
+    div.innerHTML = `
+        <div class="flex-1">
+            <h3 class="font-semibold">${task.title}</h3>
+            ${task.due_date ? `<p class="text-sm text-gray-500">Due: ${task.due_date}</p>` : ''}
+            ${task.parent_requirement_level ? `<p class="text-sm">Parent requirement: ${task.parent_requirement_level}</p>` : ''}
+        </div>
+        <div class="ml-4 flex flex-col items-end space-y-1">
+            <div class="space-x-2">
+                <button onclick="event.stopPropagation();updateStatus('${task.id}','DONE')" class="bg-green-500 text-white px-2 py-1 rounded">Done</button>
+                <button onclick="event.stopPropagation();updateStatus('${task.id}','DISMISSED')" class="bg-gray-500 text-white px-2 py-1 rounded">Dismiss</button>
+            </div>
+        </div>`;
+    return div;
+}
+
+window.updateStatus = async function(id, status) {
+    const { error } = await supabase.from('tasks').update({ status }).eq('id', id);
+    if (error) {
+        alert(error.message);
+        return;
+    }
+    const el = document.getElementById(`task-${id}`);
+    if (el) {
+        el.classList.add('task-removing');
+        el.addEventListener('transitionend', () => el.remove(), { once: true });
+    }
+};
+
+function setField(id, value, useSpan) {
+    const el = document.getElementById(id);
+    if (value) {
+        if (useSpan) {
+            el.querySelector('span').textContent = value;
+        } else {
+            el.textContent = value;
+        }
+        el.classList.remove('hidden');
+    } else {
+        el.classList.add('hidden');
+    }
+}
+
+window.openModal = function(el) {
+    document.getElementById('modal-title').textContent = el.dataset.title || '';
+    setField('modal-description', el.dataset.description);
+    setField('modal-parent-action', el.dataset.parentAction, true);
+    setField('modal-parent-requirement', el.dataset.parentReq, true);
+    setField('modal-student-action', el.dataset.studentAction, true);
+    setField('modal-student-requirement', el.dataset.studentReq, true);
+    setField('modal-consequence', el.dataset.consequence, true);
+    setField('modal-due-date', el.dataset.dueDate, true);
+    document.getElementById('modal').classList.remove('hidden');
+};
+
+window.closeModal = function() {
+    document.getElementById('modal').classList.add('hidden');
+};
+
+window.openSettings = function() {
+    document.getElementById('settings-modal').classList.remove('hidden');
+};
+
+window.closeSettings = function() {
+    document.getElementById('settings-modal').classList.add('hidden');
+};
+</script>
+</body>
+</html>
