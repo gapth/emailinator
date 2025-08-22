@@ -1,12 +1,4 @@
-openai>=1.0.0
+beautifulsoup4
 pytest>=7.0
 python-dotenv>=1.0.0
-sqlalchemy>=2.0
-beautifulsoup4
-fuzzywuzzy
-python-Levenshtein
-fastapi>=0.110
-uvicorn>=0.23
-requests>=2.0
-python-multipart
-jinja2
+requests>=2.0.0

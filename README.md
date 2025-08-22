@@ -1,162 +1,53 @@
 # Emailinator
 
-A service that extracts tasks from emailed announcements. It exposes a FastAPI endpoint to receive `.eml` files and updates a local SQLite database.
+Emailinator now relies on Supabase for storage and Edge Functions for task extraction. The legacy Python FastAPI service has been removed.
 
-## Installation
+## Static test page
 
-Install the Python dependencies before running the service or tests:
+A simple HTML page for testing Supabase authentication and task listings is available at `index.html`.
+
+Serve it locally with a basic HTTP server:
+
+```bash
+SUPABASE_URL=<url> SUPABASE_ANON_KEY=<anon-key> make serve
+# or generate env.js yourself and run
+python -m http.server --directory src/emailinator/templates 8000
+```
+
+Then open [http://localhost:8000](http://localhost:8000) in your browser.
+The Makefile writes these values to `env.js` so the page can initialize the Supabase client.
+
+## Development
+
+### Python tests
+
+Install dependencies and run the email parser unit tests:
 
 ```bash
 pip install -r requirements.txt
+pytest
 ```
 
-## Running the service
+### Supabase Edge Function tests
 
-Start the service using the Makefile (default target `run`):
-
-```bash
-make run
-```
-
-`make` without arguments also starts the server. The service listens on the
-`HOST` and `PORT` environment variables (default `0.0.0.0:8000`).
-
-## Users and API keys
-
-All endpoints require a username and API key. Create or update a user with:
-
-```bash
-python - <<'PY'
-from emailinator.storage import crud
-crud.upsert_user("alice", "secret")
-PY
-```
-
-Use your own values for the username and API key.
-
-Authentication uses a pluggable backend. The default `api_key` backend
-verifies credentials stored in the database, but the design allows
-additional mechanisms such as OAuth providers in the future. Set the
-`AUTH_BACKEND` environment variable to switch backends once new options
-are implemented.
-
-## Submitting an email
-
-Use the helper CLI to post a downloaded `.eml` file to the running service:
-
-```bash
-python -m emailinator.send_email --user alice --api-key secret --file path/to/email.eml
-```
-
-You can override the service URL with `--url`.
-
-## Listing tasks
-
-Retrieve stored tasks with a browser or `curl` using the `/tasks` endpoint. Pass the username and API key as query parameters along with any filters (all filters are optional):
-
-- `due_date_from` and `due_date_to` (`YYYY-MM-DD`) bound the due date range.
-- `include_no_due_date` (default `true`) excludes tasks without a due date when set to `false`.
-- `parent_requirement_levels` (repeatable) limits results to specific levels.
-
-Omitting a parameter means no filtering on that field.
-
-Example with `curl`:
-
-```bash
-curl "http://localhost:8000/tasks?user=alice&api_key=secret&due_date_from=2024-09-01&due_date_to=2024-09-30&parent_requirement_levels=MANDATORY&parent_requirement_levels=OPTIONAL"
-```
-
-You can also navigate to a simpler query, e.g.:
-
-```
-http://localhost:8000/tasks?user=alice&api_key=secret&due_date_to=2024-09-01
-```
-
-The response JSON matches the `tasks_list` format used throughout the project.
-
-## Supabase web UI
-
-If you store tasks in Supabase, the service can serve a simple web
-interface backed directly by Supabase.  Configure the Supabase project
-URL and anonymous key in the environment variables `SUPABASE_URL` and
-`SUPABASE_ANON_KEY`, then navigate to `/supabase` in the running
-service.  The page prompts for an email and password and displays the
-tasks for the signed-in user.
-
-## Supabase inbound-email function
-
-The repository includes a Supabase Edge Function at `supabase/functions/inbound-email` that inserts raw inbound messages into the `raw_emails` table and processes them through the OpenAI API to extract deduplicated tasks.  The function authenticates with the caller's Supabase JWT.
-
-Before deploying, store your OpenAI key as a Supabase secret:
-
-```bash
-supabase secrets set OPENAI_API_KEY=your-key
-```
-
-```bash
-supabase functions deploy inbound-email
-```
-
-When calling the function, pass the user's access token in the `Authorization` header:
-
-```bash
-curl -i -X POST "$SUPABASE_URL/functions/v1/inbound-email" \\
-  -H "Authorization: Bearer $ACCESS_TOKEN" \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-    "from_email":"teacher@school.org",
-    "to_email":"u_00000000-0000-0000-0000-000000000000@in.emailinator.app",
-    "subject":"Tie Ceremony details",
-    "text_body":"Ceremony on Sept 12 at 5pm. Parents attend.",
-    "provider_meta":{"source":"postmark"}
-  }'
-```
-
-#### Sending a local `.eml` file
-
-Use the helper CLI to send a raw email file to the same function:
-
-```bash
-python -m emailinator.send_to_supabase \
-  --file path/to/email.eml \
-  --access-token "$ACCESS_TOKEN" \
-  --url "$SUPABASE_URL/functions/v1/inbound-email"
-```
-
-The script parses the email and posts its contents as JSON.
-
-The Edge Function uses the service role key internally so it can insert rows even when Row Level Security (RLS) is enabled on the database.
-
-### Testing the inbound-email function
-
-Install the JavaScript dev dependencies and run the tests with `tsx`:
+Install JavaScript dependencies and run the Edge Function tests:
 
 ```bash
 npm install
 npm run test:inbound-email
 ```
 
-`tsx` executes the TypeScript tests without requiring Node's experimental flags, allowing them to run on Node 20 and later.
+### Manual email submission
 
-## Updating the Supabase database
-
-Run the SQL migrations to keep your database schema in sync with the
-application.  For a local Supabase instance, start the stack and reset
-the database which applies all migrations:
+Use the helper script to post a `.eml` file to the inbound-email Edge Function:
 
 ```bash
-supabase start
-supabase db reset
+source .venv/bin/activate
+ACCESS_TOKEN=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+  -H "apikey: $ANON_KEY" \                                                          
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" \
+  | jq -r .access_token)   
+python -m emailinator.send_to_supabase --file path/to/email.eml --access-token "$ACCESS_TOKEN" --url "$SUPABASE_URL/functions/v1/inbound-email"
 ```
-
-To apply the same migrations to your hosted Supabase project, push them
-using the project reference (find it in the Supabase dashboard):
-
-```bash
-supabase db push --project-ref your-project-ref
-```
-
-These commands incorporate the new `preferences` columns
-(`parent_requirement_levels` and `include_no_due_date`) and remove the
-obsolete fields.
 

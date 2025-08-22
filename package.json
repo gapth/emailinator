@@ -1,7 +1,7 @@
 {
   "name": "emailinator",
   "version": "1.0.0",
-  "description": "A service that extracts tasks from emailed announcements. It exposes a FastAPI endpoint to receive `.eml` files and updates a local SQLite database.",
+  "description": "Utilities and Supabase Edge Functions for extracting tasks from emailed announcements.",
   "main": "index.js",
   "directories": {
     "test": "tests"

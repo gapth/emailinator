@@ -1,13 +1,12 @@
 PYTHON := python3
 VENV := .venv
 ACTIVATE := source $(VENV)/bin/activate
-DB := tasks.db
 STAMP := $(VENV)/.requirements.stamp
 
-# Default target: run the service
-default: run
+# Default target: run tests
+default: test
 
-.PHONY: venv install run web test clean dbshell
+.PHONY: venv install test serve clean
 
 # Create virtual environment if it doesn't exist
 venv:
@@ -25,30 +24,20 @@ $(STAMP): requirements.txt | $(VENV)/bin/activate
 
 install: venv $(STAMP)
 
-# Run the FastAPI service
-run: install
-	$(ACTIVATE) && uvicorn emailinator.service:app --reload
-
-# Backward-compatible alias
-web: run
-
 # Run tests with pytest
 test: install
 	$(ACTIVATE) && \
 	if [ "$(TESTS)" != "" ]; then \
-		pytest -s $(foreach t,$(TESTS),tests/$(t).py); \
+	        pytest -s $(foreach t,$(TESTS),tests/$(t).py); \
 	else \
-		pytest -s; \
-	fi
-
-# Inspect the database
-dbshell:
-	@if [ -f $(DB) ]; then \
-		sqlite3 $(DB); \
-	else \
-		echo "Database file '$(DB)' not found."; \
+	        pytest -s; \
 	fi
 # Remove virtual environment and cache files
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+
+# Serve the static test page locally at http://localhost:8000
+serve:
+	@printf "window.SUPABASE_URL = \"%s\";\nwindow.SUPABASE_ANON_KEY = \"%s\";\n" "$(SUPABASE_URL)" "$(SUPABASE_ANON_KEY)" > src/emailinator/templates/env.js
+	$(PYTHON) -m http.server --directory src/emailinator/templates 8000

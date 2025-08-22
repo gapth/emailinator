@@ -5,17 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "emailinator"
 version = "0.1.0"
-description = "Email parser that extracts tasks using OpenAI API"
+description = "Email parser utilities used by tests"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "openai>=1.0.0",
-    "pytest>=7.0",
+    "beautifulsoup4",
     "python-dotenv>=1.0.0",
-    "fastapi>=0.110",
-    "uvicorn>=0.23",
-    "requests>=2.0",
-    "jinja2"
+    "pytest>=7.0",
 ]
 
 [tool.setuptools.packages.find]
