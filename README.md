@@ -57,10 +57,9 @@ Deploy the function and schedule it to run periodically using Supabase Cron:
 
 ```bash
 supabase functions deploy reprocess-unprocessed
-supabase functions schedule reprocess-unprocessed '0 * * * *'
 ```
 
-The above schedules the function to run hourly. Adjust the cron expression as needed.
+Schedule the reprocess-unprocessed Edge Function to recur on the Supabase dashboard > Integrations > Cron
 ### Dumping and repopulating the local database
 
 Export the entire local Supabase database, including `auth.users`, to
