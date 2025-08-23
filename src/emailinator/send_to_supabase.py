@@ -1,10 +1,20 @@
 import argparse
+import email
+from pathlib import Path
 from email.message import Message
 from email.header import decode_header, make_header
 
 from bs4 import BeautifulSoup
-from emailinator.input.email_reader import read_email_file
 import requests
+
+
+def read_email_file(path: str) -> Message:
+    """Reads a .eml file and returns an email.message.Message object."""
+    path_obj = Path(path)
+    if not path_obj.exists():
+        raise FileNotFoundError(f"No such file: {path}")
+    with open(path_obj, "rb") as f:
+        return email.message_from_binary_file(f)
 
 
 def _decode_header(value: str | None) -> str | None:
