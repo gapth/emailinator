@@ -238,6 +238,63 @@ test("rolls back tasks if inserting new tasks fails", async () => {
   assertEquals(supabase.state.raw_emails[0].status, "UNPROCESSED");
 });
 
+test("sanitizes invalid task fields", async () => {
+  const supabase = createSupabaseStub();
+  const fetchStub = createFetchStub([
+    {
+      title: "Test",
+      due_date: "",
+      parent_action: "FLY",
+      student_action: "",
+      parent_requirement_level: "MUST",
+      student_requirement_level: "MANDATORY",
+    },
+  ]);
+  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+
+  const res = await handler(
+    new Request("http://localhost", {
+      method: "POST",
+      headers: { authorization: "Bearer valid" },
+      body: JSON.stringify({ text_body: "email" }),
+    }),
+  );
+  assertEquals(res.status, 200);
+  const stored = supabase.state.tasks[0];
+  assertEquals(stored.due_date, null);
+  assertEquals(stored.parent_action, null);
+  assertEquals(stored.student_action, null);
+  assertEquals(stored.parent_requirement_level, null);
+  assertEquals(stored.student_requirement_level, "MANDATORY");
+});
+
+test("logs OpenAI response when task insert fails", async () => {
+  const existing = [
+    { user_id: "user-1", title: "Old", status: "PENDING" },
+  ];
+  const supabase = createSupabaseStub(existing, { failTaskInsert: true });
+  const fetchStub = createFetchStub([{ title: "New" }]);
+  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+
+  const errors: string[] = [];
+  const orig = console.error;
+  console.error = (...args: any[]) => {
+    errors.push(args.join(" "));
+  };
+  const res = await handler(
+    new Request("http://localhost", {
+      method: "POST",
+      headers: { authorization: "Bearer valid" },
+      body: JSON.stringify({ text_body: "email" }),
+    }),
+  );
+  console.error = orig;
+  assertEquals(res.status, 500);
+  const combined = errors.join(" ");
+  assert(combined.includes("openai_response"));
+  assert(combined.includes("New"));
+});
+
 test("handles zero tasks correctly", async () => {
   const existing = [
     { user_id: "user-1", title: "Old", status: "PENDING" },

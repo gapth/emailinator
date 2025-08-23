@@ -98,13 +98,70 @@ const TASK_SCHEMA = {
   },
 };
 
+const PARENT_ACTIONS = [
+  "NONE",
+  "SUBMIT",
+  "SIGN",
+  "PAY",
+  "PURCHASE",
+  "ATTEND",
+  "TRANSPORT",
+  "VOLUNTEER",
+  "OTHER",
+];
+const REQUIREMENT_LEVELS = ["NONE", "OPTIONAL", "VOLUNTEER", "MANDATORY"];
+const STUDENT_ACTIONS = [
+  "NONE",
+  "SUBMIT",
+  "ATTEND",
+  "SETUP",
+  "BRING",
+  "PREPARE",
+  "WEAR",
+  "COLLECT",
+  "OTHER",
+];
+
+function sanitizeTasks(raw: any[]): Record<string, unknown>[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((t) => {
+      if (!t || typeof t.title !== "string" || t.title.trim() === "") return null;
+      const task: Record<string, unknown> = { title: t.title };
+      task.description = typeof t.description === "string" && t.description.trim() !== "" ? t.description : null;
+      if (typeof t.due_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t.due_date)) {
+        task.due_date = t.due_date;
+      } else {
+        task.due_date = null;
+      }
+      task.consequence_if_ignore =
+        typeof t.consequence_if_ignore === "string" && t.consequence_if_ignore.trim() !== ""
+          ? t.consequence_if_ignore
+          : null;
+      task.parent_action = PARENT_ACTIONS.includes(t.parent_action) ? t.parent_action : null;
+      task.parent_requirement_level = REQUIREMENT_LEVELS.includes(t.parent_requirement_level)
+        ? t.parent_requirement_level
+        : null;
+      task.student_action = STUDENT_ACTIONS.includes(t.student_action) ? t.student_action : null;
+      task.student_requirement_level = REQUIREMENT_LEVELS.includes(t.student_requirement_level)
+        ? t.student_requirement_level
+        : null;
+      return task;
+    })
+    .filter(Boolean) as Record<string, unknown>[];
+}
+
 async function extractDeduplicatedTasks(
   fetchFn: typeof fetch,
   openAiApiKey: string,
   emailText: string,
   existingTasks: Record<string, unknown>[],
   userId: string, // added
-): Promise<{ tasks: Record<string, unknown>[]; promptTokens: number; completionTokens: number }> {
+): Promise<{
+  tasks: Record<string, unknown>[];
+  promptTokens: number;
+  completionTokens: number;
+  rawContent: string;
+}> {
   const prompt =
     "You are a careful assistant for a busy parent.\n" +
     "You are given an existing list of tasks and a new email.\n" +
@@ -153,8 +210,14 @@ async function extractDeduplicatedTasks(
   );
 
   const content = data.choices?.[0]?.message?.content ?? "{}";
-  const tasks = JSON.parse(content).tasks ?? [];
-  return { tasks, promptTokens, completionTokens };
+  let parsed: any[] = [];
+  try {
+    parsed = JSON.parse(content).tasks ?? [];
+  } catch (_e) {
+    parsed = [];
+  }
+  const tasks = sanitizeTasks(parsed);
+  return { tasks, promptTokens, completionTokens, rawContent: content };
 }
 
 type InboundPayload = {
@@ -251,13 +314,14 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
         student_requirement_level: t.student_requirement_level ?? null,
       }));
 
-      const { tasks, promptTokens, completionTokens } = await extractDeduplicatedTasks(
-        fetch,
-        openAiApiKey,
-        emailText,
-        existingForAi,
-        user_id, // pass user id for logging
-      );
+      const { tasks, promptTokens, completionTokens, rawContent } =
+        await extractDeduplicatedTasks(
+          fetch,
+          openAiApiKey,
+          emailText,
+          existingForAi,
+          user_id, // pass user id for logging
+        );
       console.info(`[inbound-email] user=${user_id} deduped_tasks=${tasks.length}`);
 
       const inputCostNano = promptTokens * INPUT_NANO_USD_PER_TOKEN;
@@ -314,6 +378,9 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
           .from("tasks")
           .insert(rows);
         if (insertError) {
+          console.error(
+            `[inbound-email] user=${user_id} task_insert_failed: ${insertError.message} openai_response=${rawContent}`,
+          );
           const restoreRows = existingRows.map(({ id, ...r }: any) => r);
           await supabase.from("tasks").insert(restoreRows);
           return new Response(insertError.message, { status: 500 });
@@ -326,6 +393,9 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
         .eq("id", rawData.id);
 
       if (updateError) {
+        console.error(
+          `[inbound-email] user=${user_id} raw_email_update_failed: ${updateError.message} openai_response=${rawContent}`,
+        );
         await supabase
           .from("tasks")
           .delete()
