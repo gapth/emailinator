@@ -1,0 +1,29 @@
+name: emailinator_flutter
+description: A new Flutter project for Emailinator.
+
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.0.0
+  provider: ^6.0.0
+  intl: ^0.19.0
+  flutter_slidable: ^3.0.0
+  cupertino_icons: ^1.0.2
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
