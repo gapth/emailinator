@@ -33,3 +33,5 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 src/emailinator/templates/env.js
+
+supabase/seed.sql
