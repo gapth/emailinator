@@ -86,6 +86,38 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
         student_action: t.student_action ?? null,
         student_requirement_level: t.student_requirement_level ?? null,
       }));
+      const { data: budgetRow, error: budgetError } = await supabase
+        .from("openai_budget")
+        .select("remaining_nano_usd")
+        .eq("user_id", user_id)
+        .single();
+      const remainingBudget = budgetError ? 0 : budgetRow.remaining_nano_usd;
+
+      if (remainingBudget <= 0) {
+        const { error: rawError } = await supabase
+          .from("raw_emails")
+          .insert({
+            user_id,
+            from_email: payload.from_email ?? null,
+            to_email: payload.to_email ?? null,
+            subject: payload.subject ?? null,
+            text_body: payload.text_body ?? null,
+            html_body: payload.html_body ?? null,
+            provider_meta: payload.provider_meta ?? {},
+            sent_at: sentAt,
+            message_id: messageId,
+            openai_input_cost_nano_usd: 0,
+            openai_output_cost_nano_usd: 0,
+            tasks_before: existingCount,
+            tasks_after: existingCount,
+            status: "UNPROCESSED",
+          });
+        if (rawError) return new Response(rawError.message, { status: 500 });
+        return new Response(JSON.stringify({ task_count: 0 }), {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        });
+      }
 
       const { tasks, promptTokens, completionTokens, rawContent } =
         await extractDeduplicatedTasks(
@@ -124,23 +156,28 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
 
       if (rawError) return new Response(rawError.message, { status: 500 });
 
-        const applyResult = await replaceTasksAndUpdateEmail({
-          supabase,
-          userId: user_id,
-          rawEmailId: rawData.id,
-          tasks,
-          existingRows,
-          promptTokens,
-          completionTokens,
-          rawContent,
-          logPrefix: "inbound-email",
-        });
-        if (!applyResult.success) return new Response(applyResult.error, { status: 500 });
+      const applyResult = await replaceTasksAndUpdateEmail({
+        supabase,
+        userId: user_id,
+        rawEmailId: rawData.id,
+        tasks,
+        existingRows,
+        promptTokens,
+        completionTokens,
+        rawContent,
+        logPrefix: "inbound-email",
+      });
+      if (!applyResult.success) return new Response(applyResult.error, { status: 500 });
 
-        return new Response(JSON.stringify({ task_count: applyResult.taskCount }), {
-          headers: { "content-type": "application/json" },
-          status: 200,
-        });
+      const totalCost = inputCostNano + outputCostNano;
+      await supabase
+        .from("openai_budget")
+        .upsert({ user_id, remaining_nano_usd: remainingBudget - totalCost });
+
+      return new Response(JSON.stringify({ task_count: applyResult.taskCount }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
     } catch (e) {
       return new Response(`Bad Request: ${e}`, { status: 400 });
     }

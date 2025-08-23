@@ -11,8 +11,8 @@ function assertEquals(actual: unknown, expected: unknown, msg = "") {
 import { createHandler } from "./index.ts";
 import { test } from "node:test";
 
-function createSupabaseStub(initialRaw: any[] = [], initialTasks: any[] = []) {
-  const state = { raw_emails: [...initialRaw], tasks: [...initialTasks] };
+function createSupabaseStub(initialRaw: any[] = [], initialTasks: any[] = [], budgetNanoUsd = 1_000_000_000) {
+  const state = { raw_emails: [...initialRaw], tasks: [...initialTasks], budget: budgetNanoUsd };
   return {
     state,
     from(table: string) {
@@ -87,6 +87,26 @@ function createSupabaseStub(initialRaw: any[] = [], initialTasks: any[] = []) {
           },
         };
       }
+      if (table === "openai_budget") {
+        return {
+          select() {
+            const builder: any = {
+              eq(_f: string, _v: any) { return builder; },
+              single() {
+                if (state.budget === undefined) {
+                  return { data: null, error: { code: "PGRST116" } };
+                }
+                return { data: { remaining_nano_usd: state.budget }, error: null };
+              },
+            };
+            return builder;
+          },
+          upsert(row: any) {
+            state.budget = row.remaining_nano_usd;
+            return { error: null };
+          },
+        };
+      }
       throw new Error("unknown table");
     },
   };
@@ -119,13 +139,61 @@ test("processes UNPROCESSED raw emails", async () => {
   ];
   const supabase = createSupabaseStub(rawEmails, tasks);
   const fetchStub = createFetchStub([{ title: "New" }]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = createHandler({
+    supabase,
+    fetch: fetchStub,
+    openAiApiKey: "test",
+    serviceRoleKey: "svc",
+  });
 
-  const res = await handler(new Request("http://localhost", { method: "POST" }));
+  const res = await handler(
+    new Request("http://localhost", {
+      method: "POST",
+      headers: { authorization: "Bearer svc" },
+    }),
+  );
   assertEquals(res.status, 200);
   assertEquals(supabase.state.tasks.length, 1);
   assertEquals(supabase.state.tasks[0].title, "New");
   assertEquals(supabase.state.raw_emails[0].status, "UPDATED_TASKS");
   const body = await res.json();
   assertEquals(body.processed, 1);
+});
+
+test("requires service role key", async () => {
+  const supabase = createSupabaseStub();
+  const fetchStub = createFetchStub([]);
+  const handler = createHandler({
+    supabase,
+    fetch: fetchStub,
+    openAiApiKey: "test",
+    serviceRoleKey: "svc",
+  });
+  const res = await handler(new Request("http://localhost", { method: "POST" }));
+  assertEquals(res.status, 401);
+});
+
+test("skips when budget depleted", async () => {
+  const rawEmails = [
+    { id: 1, user_id: "user-1", text_body: "email", html_body: null, status: "UNPROCESSED" },
+  ];
+  const supabase = createSupabaseStub(rawEmails, [], 0);
+  const fetchStub = createFetchStub([{ title: "New" }]);
+  const handler = createHandler({
+    supabase,
+    fetch: fetchStub,
+    openAiApiKey: "test",
+    serviceRoleKey: "svc",
+  });
+  const res = await handler(
+    new Request("http://localhost", {
+      method: "POST",
+      headers: { authorization: "Bearer svc" },
+    }),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(fetchStub.calls.length, 0);
+  assertEquals(supabase.state.raw_emails[0].status, "UNPROCESSED");
+  const body = await res.json();
+  assertEquals(body.processed, 0);
 });

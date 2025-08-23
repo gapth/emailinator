@@ -44,10 +44,10 @@ Use the helper script to post a `.eml` file to the inbound-email Edge Function:
 ```bash
 source .venv/bin/activate
 ACCESS_TOKEN=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
-  -H "apikey: $ANON_KEY" \                                                          
+  -H "api-key: $SUPABASE_ANON_KEY" \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" \
-  | jq -r .access_token)   
+  | jq -r .access_token)
 python -m emailinator.send_to_supabase --file path/to/email.eml --access-token "$ACCESS_TOKEN" --url "$SUPABASE_URL/functions/v1/inbound-email"
 ```
 
@@ -60,6 +60,35 @@ supabase functions deploy reprocess-unprocessed
 ```
 
 Schedule the reprocess-unprocessed Edge Function to recur on the Supabase dashboard > Integrations > Cron
+
+To test locally:
+
+```bash
+curl -i -X POST "$SUPABASE_URL/functions/v1/reprocess-unprocessed" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"  
+```
+
+### Depositing monthly OpenAI budget
+
+Deploy the `deposit-budget` Edge Function and schedule it to run regularly (e.g. monthly) with Supabase Cron. Each run deposits a fixed amount of OpenAI API budget into the specified user's account.
+
+Set the deposit amount via the `BUDGET_DEPOSIT_NANO_USD` environment variable.
+
+```
+supabase functions deploy deposit-budget
+```
+
+Then schedule the function from the Supabase dashboard and invoke it with the service role key.
+
+To test locally:
+
+```bash
+curl -i -X POST "$SUPABASE_URL/functions/v1/deposit-budget" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H 'Content-type: application/json' \
+  -d "{\"user_id\": \"$USER_ID\"}"
+```
+
 ### Dumping and repopulating the local database
 
 Export the entire local Supabase database, including `auth.users`, to

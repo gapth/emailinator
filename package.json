@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test:inbound-email": "tsx supabase/functions/inbound-email/index.test.ts",
-    "test:reprocess-unprocessed": "tsx supabase/functions/reprocess-unprocessed/index.test.ts"
+    "test:reprocess-unprocessed": "tsx supabase/functions/reprocess-unprocessed/index.test.ts",
+    "test:deposit-budget": "tsx supabase/functions/deposit-budget/index.test.ts"
   },
   "keywords": [],
   "author": "",

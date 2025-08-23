@@ -12,8 +12,8 @@ import { createHandler } from "./index.ts";
 import { test } from "node:test";
 
 // Supabase stub factory
-function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: boolean } = {}) {
-  const state = { raw_emails: [], tasks: [...initialTasks] };
+function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: boolean; budgetNanoUsd?: number } = {}) {
+  const state = { raw_emails: [], tasks: [...initialTasks], budget: opts.budgetNanoUsd ?? 1_000_000_000 };
   let insertAttempts = 0;
   return {
     state,
@@ -118,6 +118,26 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
           },
         };
       }
+      if (table === "openai_budget") {
+        return {
+          select() {
+            const builder: any = {
+              eq(_f: string, _v: any) { return builder; },
+              single() {
+                if (state.budget === undefined) {
+                  return { data: null, error: { code: "PGRST116" } };
+                }
+                return { data: { remaining_nano_usd: state.budget }, error: null };
+              },
+            };
+            return builder;
+          },
+          upsert(row: any) {
+            state.budget = row.remaining_nano_usd;
+            return { error: null };
+          },
+        };
+      }
       throw new Error("unknown table");
     },
   };
@@ -172,6 +192,24 @@ test("hits OpenAI API to extract tasks", async () => {
   );
   assertEquals(res.status, 200);
   assertEquals(fetchStub.calls.length, 1);
+});
+
+test("skips processing when budget depleted", async () => {
+  const supabase = createSupabaseStub([], { budgetNanoUsd: 0 });
+  const fetchStub = createFetchStub([{ title: "New" }]);
+  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+
+  const res = await handler(
+    new Request("http://localhost", {
+      method: "POST",
+      headers: { authorization: "Bearer valid" },
+      body: JSON.stringify({ text_body: "email" }),
+    }),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(fetchStub.calls.length, 0);
+  assertEquals(supabase.state.raw_emails.length, 1);
+  assertEquals(supabase.state.raw_emails[0].status, "UNPROCESSED");
 });
 
 test("passes existing tasks and stores new set", async () => {

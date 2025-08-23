@@ -2,17 +2,23 @@ import {
   extractDeduplicatedTasks,
   replaceTasksAndUpdateEmail,
   chooseEmailText,
+  INPUT_NANO_USD_PER_TOKEN,
+  OUTPUT_NANO_USD_PER_TOKEN,
 } from "../_shared/task-utils.ts";
 
 export interface Deps {
   supabase: any;
   fetch: typeof fetch;
   openAiApiKey: string;
+  serviceRoleKey: string;
 }
 
-export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
+export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }: Deps) {
   return async function handler(req: Request): Promise<Response> {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+
+    const auth = req.headers.get("authorization");
+    if (auth !== `Bearer ${serviceRoleKey}`) return new Response("Unauthorized", { status: 401 });
 
     const { data: raws, error } = await supabase
       .from("raw_emails")
@@ -25,6 +31,14 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
       try {
         const user_id = raw.user_id;
         const emailText = chooseEmailText(raw);
+
+        const { data: budgetRow, error: budgetError } = await supabase
+          .from("openai_budget")
+          .select("remaining_nano_usd")
+          .eq("user_id", user_id)
+          .single();
+        const remainingBudget = budgetError ? 0 : budgetRow.remaining_nano_usd;
+        if (remainingBudget <= 0) continue;
 
         const { data: existingRaw, error: existingError } = await supabase
           .from("tasks")
@@ -65,7 +79,15 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
           rawContent,
           logPrefix: "reprocess-unprocessed",
         });
-        if (result.success) processed++;
+        if (result.success) {
+          processed++;
+          const totalCost =
+            promptTokens * INPUT_NANO_USD_PER_TOKEN +
+            completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
+          await supabase
+            .from("openai_budget")
+            .upsert({ user_id, remaining_nano_usd: remainingBudget - totalCost });
+        }
       } catch (e) {
         console.error(`[reprocess-unprocessed] email_id=${raw.id} error=${e}`);
       }
@@ -84,6 +106,11 @@ if (import.meta.main) {
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
-  const handler = createHandler({ supabase, fetch, openAiApiKey: OPENAI_API_KEY });
+  const handler = createHandler({
+    supabase,
+    fetch,
+    openAiApiKey: OPENAI_API_KEY,
+    serviceRoleKey: SERVICE_ROLE,
+  });
   Deno.serve(handler);
 }
