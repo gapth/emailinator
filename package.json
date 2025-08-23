@@ -7,7 +7,8 @@
     "test": "tests"
   },
   "scripts": {
-    "test:inbound-email": "tsx supabase/functions/inbound-email/index.test.ts"
+    "test:inbound-email": "tsx supabase/functions/inbound-email/index.test.ts",
+    "test:reprocess-unprocessed": "tsx supabase/functions/reprocess-unprocessed/index.test.ts"
   },
   "keywords": [],
   "author": "",

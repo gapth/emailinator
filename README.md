@@ -50,6 +50,17 @@ ACCESS_TOKEN=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password
   | jq -r .access_token)   
 python -m emailinator.send_to_supabase --file path/to/email.eml --access-token "$ACCESS_TOKEN" --url "$SUPABASE_URL/functions/v1/inbound-email"
 ```
+
+### Scheduling reprocess-unprocessed
+
+Deploy the function and schedule it to run periodically using Supabase Cron:
+
+```bash
+supabase functions deploy reprocess-unprocessed
+supabase functions schedule reprocess-unprocessed '0 * * * *'
+```
+
+The above schedules the function to run hourly. Adjust the cron expression as needed.
 ### Dumping and repopulating the local database
 
 Export the entire local Supabase database, including `auth.users`, to
