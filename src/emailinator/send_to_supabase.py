@@ -72,6 +72,8 @@ def main() -> None:
     from_email = _decode_header(msg.get("From"))
     to_email = _decode_header(msg.get("To"))
     subject = _decode_header(msg.get("Subject"))
+    sent_at = _decode_header(msg.get("Date"))
+    message_id = _decode_header(msg.get("Message-ID"))
     text_body, html_body = _extract_bodies(msg)
 
     payload = {
@@ -80,6 +82,8 @@ def main() -> None:
         "subject": subject,
         "text_body": text_body,
         "html_body": html_body,
+        "date": sent_at,
+        "message_id": message_id,
         "provider_meta": {"source": "cli"},
     }
 

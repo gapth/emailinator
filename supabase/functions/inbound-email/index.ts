@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 const MODEL_NAME = "gpt-4.1-mini";
-const INPUT_USD_PER_TOKEN = 0.4e-6;
-const OUTPUT_USD_PER_TOKEN = 1.6e-6;
+const INPUT_NANO_USD_PER_TOKEN = 400;
+const OUTPUT_NANO_USD_PER_TOKEN = 1600;
 const TEXT_BODY_MIN_RATIO_OF_HTML = 0.3; // Use text/plain only if it's at least 30% of the HTML length
 
 const TASK_SCHEMA = {
@@ -104,7 +104,7 @@ async function extractDeduplicatedTasks(
   emailText: string,
   existingTasks: Record<string, unknown>[],
   userId: string, // added
-): Promise<Record<string, unknown>[]> {
+): Promise<{ tasks: Record<string, unknown>[]; promptTokens: number; completionTokens: number }> {
   const prompt =
     "You are a careful assistant for a busy parent.\n" +
     "You are given an existing list of tasks and a new email.\n" +
@@ -145,14 +145,16 @@ async function extractDeduplicatedTasks(
   // Log API cost with user id
   const promptTokens = data?.usage?.prompt_tokens ?? 0;
   const completionTokens = data?.usage?.completion_tokens ?? 0;
-  const apiCost =
-    promptTokens * INPUT_USD_PER_TOKEN + completionTokens * OUTPUT_USD_PER_TOKEN;
+  const apiCostNano =
+    promptTokens * INPUT_NANO_USD_PER_TOKEN +
+    completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
   console.info(
-    `[inbound-email] user=${userId} API cost (USD): ${apiCost.toFixed(6)} (prompt=${promptTokens}, completion=${completionTokens})`,
+    `[inbound-email] user=${userId} API cost (USD): ${(apiCostNano / 1e9).toFixed(6)} (prompt=${promptTokens}, completion=${completionTokens})`,
   );
 
   const content = data.choices?.[0]?.message?.content ?? "{}";
-  return JSON.parse(content).tasks ?? [];
+  const tasks = JSON.parse(content).tasks ?? [];
+  return { tasks, promptTokens, completionTokens };
 }
 
 type InboundPayload = {
@@ -161,6 +163,8 @@ type InboundPayload = {
   subject?: string;
   text_body?: string;
   html_body?: string;
+  date?: string;
+  message_id?: string;
   provider_meta?: Record<string, any>;
 };
 
@@ -185,22 +189,34 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
       const payload = await req.json() as InboundPayload;
 
       const user_id = user.id;
-      // Store raw email and grab ID for task linking
-      const { data: rawData, error: rawError } = await supabase
-        .from("raw_emails")
-        .insert({
-          user_id,
-          from_email: payload.from_email ?? null,
-          to_email: payload.to_email ?? null,
-          subject: payload.subject ?? null,
-          text_body: payload.text_body ?? null,
-          html_body: payload.html_body ?? null,
-          provider_meta: payload.provider_meta ?? {},
-        })
-        .select("id")
-        .single();
 
-      if (rawError) return new Response(rawError.message, { status: 500 });
+      const sentAt = payload.date ? new Date(payload.date).toISOString() : null;
+      const messageId = payload.message_id ?? null;
+
+      if (messageId) {
+        const { data: existingEmail, error: dupError } = await supabase
+          .from("raw_emails")
+          .select("id")
+          .eq("message_id", messageId);
+        if (dupError) return new Response(dupError.message, { status: 500 });
+        if (Array.isArray(existingEmail) && existingEmail.length > 0) {
+          return new Response("Duplicate Message-ID", { status: 409 });
+        }
+      } else {
+        const query = supabase.from("raw_emails").select("id");
+        const fromEmail = payload.from_email ?? null;
+        const toEmail = payload.to_email ?? null;
+        const subject = payload.subject ?? null;
+        if (fromEmail !== null) query.eq("from_email", fromEmail); else query.is("from_email", null);
+        if (toEmail !== null) query.eq("to_email", toEmail); else query.is("to_email", null);
+        if (subject !== null) query.eq("subject", subject); else query.is("subject", null);
+        if (sentAt !== null) query.eq("sent_at", sentAt); else query.is("sent_at", null);
+        const { data: existingEmail, error: dupError } = await query;
+        if (dupError) return new Response(dupError.message, { status: 500 });
+        if (Array.isArray(existingEmail) && existingEmail.length > 0) {
+          return new Response("Duplicate Email", { status: 409 });
+        }
+      }
 
       // Prefer text/plain unless it's likely a short placeholder compared to HTML.
       // Some emails stuff a short placeholder in the text/plain part; use HTML instead in that case.
@@ -212,32 +228,71 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
           ? plain
           : (html || "");
 
-      const { data: existing, error: existingError } = await supabase
+      const { data: existingRaw, error: existingError } = await supabase
         .from("tasks")
-        .select(
-          "title, description, due_date, consequence_if_ignore, parent_action, parent_requirement_level, student_action, student_requirement_level",
-        )
-        .eq("user_id", user_id);
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("status", "PENDING");
 
       if (existingError) return new Response(existingError.message, { status: 500 });
 
-      const existingCount = Array.isArray(existing) ? existing.length : 0;
+      const existingRows = Array.isArray(existingRaw) ? existingRaw : [];
+      const existingCount = existingRows.length;
       console.info(`[inbound-email] user=${user_id} existing_tasks=${existingCount}`);
 
-      const tasks = await extractDeduplicatedTasks(
+      const existingForAi = existingRows.map((t: any) => ({
+        title: t.title,
+        description: t.description ?? null,
+        due_date: t.due_date ?? null,
+        consequence_if_ignore: t.consequence_if_ignore ?? null,
+        parent_action: t.parent_action ?? null,
+        parent_requirement_level: t.parent_requirement_level ?? null,
+        student_action: t.student_action ?? null,
+        student_requirement_level: t.student_requirement_level ?? null,
+      }));
+
+      const { tasks, promptTokens, completionTokens } = await extractDeduplicatedTasks(
         fetch,
         openAiApiKey,
         emailText,
-        existing ?? [],
+        existingForAi,
         user_id, // pass user id for logging
       );
       console.info(`[inbound-email] user=${user_id} deduped_tasks=${tasks.length}`);
+
+      const inputCostNano = promptTokens * INPUT_NANO_USD_PER_TOKEN;
+      const outputCostNano = completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
+
+      // Store raw email and grab ID for task linking
+      const { data: rawData, error: rawError } = await supabase
+        .from("raw_emails")
+        .insert({
+          user_id,
+          from_email: payload.from_email ?? null,
+          to_email: payload.to_email ?? null,
+          subject: payload.subject ?? null,
+          text_body: payload.text_body ?? null,
+          html_body: payload.html_body ?? null,
+          provider_meta: payload.provider_meta ?? {},
+          sent_at: sentAt,
+          message_id: messageId,
+          openai_input_cost_nano_usd: inputCostNano,
+          openai_output_cost_nano_usd: outputCostNano,
+          tasks_before: existingCount,
+          tasks_after: existingCount,
+          status: "UNPROCESSED",
+        })
+        .select("id")
+        .single();
+
+      if (rawError) return new Response(rawError.message, { status: 500 });
 
       // Replace existing tasks with deduplicated list
       const { error: delError } = await supabase
         .from("tasks")
         .delete()
-        .eq("user_id", user_id);
+        .eq("user_id", user_id)
+        .eq("status", "PENDING");
       if (delError) return new Response(delError.message, { status: 500 });
 
       if (tasks.length > 0) {
@@ -258,7 +313,27 @@ export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
         const { error: insertError } = await supabase
           .from("tasks")
           .insert(rows);
-        if (insertError) return new Response(insertError.message, { status: 500 });
+        if (insertError) {
+          const restoreRows = existingRows.map(({ id, ...r }: any) => r);
+          await supabase.from("tasks").insert(restoreRows);
+          return new Response(insertError.message, { status: 500 });
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from("raw_emails")
+        .update({ tasks_after: tasks.length, status: "UPDATED_TASKS" })
+        .eq("id", rawData.id);
+
+      if (updateError) {
+        await supabase
+          .from("tasks")
+          .delete()
+          .eq("user_id", user_id)
+          .eq("status", "PENDING");
+        const restoreRows = existingRows.map(({ id, ...r }: any) => r);
+        if (restoreRows.length > 0) await supabase.from("tasks").insert(restoreRows);
+        return new Response(updateError.message, { status: 500 });
       }
 
       return new Response(JSON.stringify({ task_count: tasks.length }), {
