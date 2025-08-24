@@ -44,7 +44,7 @@ Use the helper script to post a `.eml` file to the inbound-email Edge Function:
 ```bash
 source .venv/bin/activate
 ACCESS_TOKEN=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
-  -H "api-key: $SUPABASE_ANON_KEY" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" \
   | jq -r .access_token)
