@@ -41,13 +41,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'parent_requirement_levels': _parentRequirementLevels,
         'include_no_due_date': _includeNoDueDate,
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Settings saved!')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Settings saved!')),
+        );
+        Navigator.of(context).pop();
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save settings: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save settings: $e')),
+        );
+      }
     }
   }
 

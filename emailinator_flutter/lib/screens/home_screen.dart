@@ -18,7 +18,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _tasksFuture = _loadTasks();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      if (appState.dateRange == null) {
+        final today = DateTime.now();
+        final week = today.add(const Duration(days: 7));
+        appState.setDateRange(DateTimeRange(start: today, end: week));
+      }
+      _tasksFuture = _loadTasks();
+    });
   }
 
   Future<void> _loadTasks() async {
@@ -29,6 +37,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _signOut() async {
     await Supabase.instance.client.auth.signOut();
     Navigator.of(context).pushReplacementNamed('/login');
+  }
+
+  Future<void> _selectDateRange(BuildContext context) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final initialDateRange = appState.dateRange ??
+        DateTimeRange(
+          start: DateTime.now(),
+          end: DateTime.now().add(const Duration(days: 7)),
+        );
+    final newDateRange = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(DateTime.now().year - 5),
+      lastDate: DateTime(DateTime.now().year + 5),
+      initialDateRange: initialDateRange,
+    );
+
+    if (newDateRange != null) {
+      appState.setDateRange(newDateRange);
+      _loadTasks();
+    }
   }
 
   @override
@@ -54,7 +82,30 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          // TODO: Add date range filter
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Due:'),
+                SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => _selectDateRange(context),
+                  child: Consumer<AppState>(
+                    builder: (context, appState, child) {
+                      if (appState.dateRange == null) {
+                        return Text('Select date range');
+                      }
+                      final start = appState.dateRange!.start;
+                      final end = appState.dateRange!.end;
+                      return Text(
+                          '${start.toLocal().toString().split(' ')[0]} - ${end.toLocal().toString().split(' ')[0]}');
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: Consumer<AppState>(
               builder: (context, appState, child) {

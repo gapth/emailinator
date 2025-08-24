@@ -12,6 +12,12 @@ class AppState extends ChangeNotifier {
 
   List<Task> get tasks => _tasks;
   bool get isLoading => _isLoading;
+  DateTimeRange? get dateRange => _dateRange;
+
+  void setDateRange(DateTimeRange? newDateRange) {
+    _dateRange = newDateRange;
+    notifyListeners();
+  }
 
   Future<void> fetchTasks() async {
     _isLoading = true;
@@ -37,7 +43,7 @@ class AppState extends ChangeNotifier {
           .eq('status', 'PENDING');
 
       if (_parentRequirementLevels.isNotEmpty) {
-        query = query.filter('parent_requirement_level', 'in', '(${_parentRequirementLevels.map((l) => "'$l'").join(',')})');
+        query = query.inFilter('parent_requirement_level', _parentRequirementLevels);
       }
 
       if (_dateRange != null) {
@@ -66,7 +72,7 @@ class AppState extends ChangeNotifier {
     }
   }
   
-  void removeTask(int taskId) {
+  void removeTask(String taskId) {
     _tasks.removeWhere((task) => task.id == taskId);
     notifyListeners();
   }
