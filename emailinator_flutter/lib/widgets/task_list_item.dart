@@ -27,6 +27,68 @@ class TaskListItem extends StatelessWidget {
     }
   }
 
+  void _showDetails(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final lines = <Widget>[];
+
+        Widget addSection(String label, String? value) {
+          if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: RichText(
+              text: TextSpan(
+                style: Theme.of(ctx).textTheme.bodyMedium,
+                children: [
+                  TextSpan(text: '$label', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const TextSpan(text: ' '),
+                  TextSpan(text: value),
+                ],
+              ),
+            ),
+          );
+        }
+
+        lines.addAll([
+          if (task.description != null && task.description!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(task.description!),
+            ),
+          addSection('Parent action:', task.parentAction),
+          addSection('Parent requirement:', task.parentRequirementLevel),
+          addSection('Student action:', task.studentAction),
+          addSection('Student requirement:', task.studentRequirementLevel),
+          addSection('Consequence if ignored:', task.consequenceIfIgnore),
+          addSection('Due:', task.dueDate != null ? task.dueDate!.toIso8601String().substring(0, 10) : null),
+        ]);
+
+        // Remove empty sized boxes
+        final content = lines.where((w) => w is! SizedBox).toList();
+
+        return AlertDialog(
+          title: Text(task.title),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: content.isEmpty
+                  ? [const Text('No additional details.')] 
+                  : content,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Slidable(
@@ -69,9 +131,7 @@ class TaskListItem extends StatelessWidget {
               Text('Parent requirement: ${task.parentRequirementLevel}'),
           ],
         ),
-        onTap: () {
-          // TODO: Show task details dialog
-        },
+        onTap: () => _showDetails(context),
       ),
     );
   }
