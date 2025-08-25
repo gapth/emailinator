@@ -1,0 +1,38 @@
+name: Deploy Flutter Web to Cloudflare Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        working-directory: ./emailinator_flutter
+        run: flutter pub get
+
+      - name: Build (web, release)
+        working-directory: ./emailinator_flutter
+        run: flutter build web --release
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # If the project does not exist yet, this will create it.
+          command: pages deploy emailinator_flutter/build/web --project-name=eliminator
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
