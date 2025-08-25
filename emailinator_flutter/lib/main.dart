@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 
@@ -7,13 +6,17 @@ import 'package:emailinator_flutter/screens/login_screen.dart';
 import 'package:emailinator_flutter/screens/home_screen.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 
+const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
 
+  assert(supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty,
+      'Missing SUPABASE_URL or SUPABASE_ANON_KEY');
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
     debug: true,
   );
   runApp(
@@ -49,7 +52,8 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
-      if (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.signedOut) {
+      if (event == AuthChangeEvent.signedIn ||
+          event == AuthChangeEvent.signedOut) {
         // This will cause the widget to rebuild and show the correct screen.
         setState(() {});
       }

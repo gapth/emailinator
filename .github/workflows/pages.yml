@@ -26,7 +26,9 @@ jobs:
 
       - name: Build (web, release)
         working-directory: ./emailinator_flutter
-        run: flutter build web --release
+        run: flutter build web --release  \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
