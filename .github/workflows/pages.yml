@@ -33,6 +33,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # If the project does not exist yet, this will create it.
-          command: pages deploy emailinator_flutter/build/web --project-name=eliminator
+          command: pages deploy emailinator_flutter/build/web --project-name=emailinator.app
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
