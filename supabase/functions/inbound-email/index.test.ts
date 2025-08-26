@@ -195,7 +195,7 @@ function makeHandler(supabase: any, fetchStub: any) {
 }
 
 function makeReq(payload: any, opts: { auth?: boolean; ip?: string } = {}) {
-  const body = JSON.stringify({ to_email: "u_1@in.emailinator.app", ...payload });
+  const body = JSON.stringify({ To: "u_1@in.emailinator.app", ...payload });
   const headers: Record<string, string> = {};
   if (opts.auth !== false) {
     headers["authorization"] =
@@ -210,10 +210,10 @@ test("handles auth and IP correctly", async () => {
   const fetchStub = createFetchStub([]);
   const handler = makeHandler(supabase, fetchStub);
 
-  let res = await handler(makeReq({ text_body: "email" }, { auth: false }));
+  let res = await handler(makeReq({ TextBody: "email" }, { auth: false }));
   assertEquals(res.status, 401);
 
-  res = await handler(makeReq({ text_body: "email" }, { ip: "2.2.2.2" }));
+  res = await handler(makeReq({ TextBody: "email" }, { ip: "2.2.2.2" }));
   assertEquals(res.status, 401);
 });
 
@@ -222,7 +222,7 @@ test("hits OpenAI API to extract tasks", async () => {
   const fetchStub = createFetchStub([]);
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "hello" }));
+  const res = await handler(makeReq({ TextBody: "hello" }));
   assertEquals(res.status, 200);
   assertEquals(fetchStub.calls.length, 1);
 });
@@ -232,7 +232,7 @@ test("skips processing when budget depleted", async () => {
   const fetchStub = createFetchStub([{ title: "New" }]);
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 200);
   assertEquals(fetchStub.calls.length, 0);
   assertEquals(supabase.state.raw_emails.length, 1);
@@ -247,7 +247,7 @@ test("passes existing tasks and stores new set", async () => {
   const fetchStub = createFetchStub([{ title: "New Task" }]);
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 200);
   assert(fetchStub.calls[0].init.body.includes("Old Task"));
   assertEquals(supabase.state.tasks.length, 1);
@@ -264,7 +264,7 @@ test("keeps DB unchanged if extraction fails", async () => {
   const fetchStub = createFetchStub([], { fail: true });
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 400);
   assertEquals(supabase.state.tasks.length, 1);
   assertEquals(supabase.state.tasks[0].title, "Keep");
@@ -278,7 +278,7 @@ test("rolls back tasks if inserting new tasks fails", async () => {
   const fetchStub = createFetchStub([{ title: "New" }]);
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 500);
   assertEquals(supabase.state.tasks.length, 1);
   assertEquals(supabase.state.tasks[0].title, "Old");
@@ -299,7 +299,7 @@ test("sanitizes invalid task fields", async () => {
   ]);
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 200);
   const stored = supabase.state.tasks[0];
   assertEquals(stored.due_date, null);
@@ -322,7 +322,7 @@ test("logs OpenAI response when task insert fails", async () => {
   console.error = (...args: any[]) => {
     errors.push(args.join(" "));
   };
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   console.error = orig;
   assertEquals(res.status, 500);
   const combined = errors.join(" ");
@@ -338,7 +338,7 @@ test("handles zero tasks correctly", async () => {
   const fetchStub = createFetchStub([]);
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 200);
   const body = await res.json();
   assertEquals(body.task_count, 0);
@@ -351,9 +351,9 @@ test("detects duplicate emails by Message-ID", async () => {
   const handler = makeHandler(supabase, fetchStub);
 
   const payload = {
-    text_body: "email",
-    message_id: "<id-1>",
-    date: "Mon, 20 Jan 2025 10:00:00 +0000",
+    TextBody: "email",
+    MessageID: "<id-1>",
+    Date: "Mon, 20 Jan 2025 10:00:00 +0000",
   };
 
   let res = await handler(makeReq(payload));
@@ -370,10 +370,10 @@ test("dedupes emails without Message-ID using other fields", async () => {
   const handler = makeHandler(supabase, fetchStub);
 
   const payload = {
-    text_body: "email",
-    from_email: "a@example.com",
-    subject: "Hello",
-    date: "Mon, 20 Jan 2025 10:00:00 +0000",
+    TextBody: "email",
+    From: "a@example.com",
+    Subject: "Hello",
+    Date: "Mon, 20 Jan 2025 10:00:00 +0000",
   };
 
   let res = await handler(makeReq(payload));
@@ -393,7 +393,7 @@ test("only pending tasks are deduped", async () => {
   const fetchStub = createFetchStub([{ title: "New" }]);
   const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(makeReq({ text_body: "email" }));
+  const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 200);
   const body = fetchStub.calls[0].init.body;
   assert(body.includes("Pending"));

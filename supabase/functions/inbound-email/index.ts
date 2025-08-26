@@ -28,26 +28,29 @@ function encodeBase64(str: string): string {
 export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicPassword, allowedIps }: Deps) {
   return async function handler(req: Request): Promise<Response> {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+    console.info(`Incoming email with req.headers: ${JSON.stringify(req.headers)})`);
 
-    const ipHeader = req.headers.get("x-forwarded-for") ?? "";
-    const ip = ipHeader.split(",")[0].trim();
-    if (allowedIps.length > 0 && !allowedIps.includes(ip)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+    // const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+    // const ip = ipHeader.split(",")[0].trim();
+    // if (allowedIps.length > 0 && !allowedIps.includes(ip)) {
+    //   return new Response("Unauthorized", { status: 401 });
+    // }
 
-    const auth = req.headers.get("authorization") ?? "";
-    const [scheme, encoded] = auth.split(" ");
-    const expected = encodeBase64(`${basicUser}:${basicPassword}`);
-    if (scheme !== "Basic" || encoded !== expected) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+    // const auth = req.headers.get("authorization") ?? "";
+    // const [scheme, encoded] = auth.split(" ");
+    // const expected = encodeBase64(`${basicUser}:${basicPassword}`);
+    // if (scheme !== "Basic" || encoded !== expected) {
+    //   return new Response("Unauthorized", { status: 401 });
+    // }
 
     const rawBody = await req.text();
 
     try {
       const payload = JSON.parse(rawBody) as InboundPayload;
 
-      const alias = (payload.to_email ?? "").toLowerCase();
+      const alias = (payload.To ?? "").toLowerCase();
+      console.info(`Payload: ${JSON.stringify(payload)}`);
+      console.info(`Alias: ${alias}`);
       const { data: aliasRow, error: aliasError } = await supabase
         .from("email_aliases")
         .select("user_id")
@@ -59,8 +62,8 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
 
       const user_id = aliasRow.user_id;
 
-      const sentAt = payload.date ? new Date(payload.date).toISOString() : null;
-      const messageId = payload.message_id ?? null;
+      const sentAt = payload.Date ? new Date(payload.Date).toISOString() : null;
+      const messageId = payload.MessageID ?? null;
 
       if (messageId) {
         const { data: existingEmail, error: dupError } = await supabase
@@ -73,9 +76,9 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
         }
       } else {
         const query = supabase.from("raw_emails").select("id");
-        const fromEmail = payload.from_email ?? null;
-        const toEmail = payload.to_email ?? null;
-        const subject = payload.subject ?? null;
+        const fromEmail = payload.From ?? null;
+        const toEmail = payload.To ?? null;
+        const subject = payload.Subject ?? null;
         if (fromEmail !== null) query.eq("from_email", fromEmail); else query.is("from_email", null);
         if (toEmail !== null) query.eq("to_email", toEmail); else query.is("to_email", null);
         if (subject !== null) query.eq("subject", subject); else query.is("subject", null);
@@ -123,12 +126,12 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
           .from("raw_emails")
           .insert({
             user_id,
-            from_email: payload.from_email ?? null,
-            to_email: payload.to_email ?? null,
-            subject: payload.subject ?? null,
-            text_body: payload.text_body ?? null,
-            html_body: payload.html_body ?? null,
-            provider_meta: payload.provider_meta ?? {},
+            from_email: payload.From ?? null,
+            to_email: payload.To ?? null,
+            subject: payload.Subject ?? null,
+            text_body: payload.TextBody ?? null,
+            html_body: payload.HtmlBody ?? null,
+            provider_meta: payload.ProviderMeta ?? {},
             sent_at: sentAt,
             message_id: messageId,
             openai_input_cost_nano_usd: 0,
@@ -162,12 +165,12 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
         .from("raw_emails")
         .insert({
           user_id,
-          from_email: payload.from_email ?? null,
-          to_email: payload.to_email ?? null,
-          subject: payload.subject ?? null,
-          text_body: payload.text_body ?? null,
-          html_body: payload.html_body ?? null,
-          provider_meta: payload.provider_meta ?? {},
+          from_email: payload.From ?? null,
+          to_email: payload.To ?? null,
+          subject: payload.Subject ?? null,
+          text_body: payload.TextBody ?? null,
+          html_body: payload.HtmlBody ?? null,
+          provider_meta: payload.ProviderMeta ?? {},
           sent_at: sentAt,
           message_id: messageId,
           openai_input_cost_nano_usd: inputCostNano,
