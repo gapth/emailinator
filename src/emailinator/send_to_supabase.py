@@ -89,15 +89,16 @@ def main() -> None:
     message_id = _decode_header(msg.get("Message-ID"))
     text_body, html_body = _extract_bodies(msg)
 
+    # Use Postmark-style field names that the inbound-email function currently expects.
     payload = {
-        "from_email": from_email,
-        "to_email": to_email,
-        "subject": subject,
-        "text_body": text_body,
-        "html_body": html_body,
-        "date": sent_at,
-        "message_id": message_id,
-        "provider_meta": {"source": "cli"},
+        "From": from_email,
+        "To": to_email,
+        "Subject": subject,
+        "TextBody": text_body,
+        "HtmlBody": html_body,
+        "Date": sent_at,
+        "MessageID": message_id,
+        "ProviderMeta": {"source": "cli"},
     }
 
     # Force X-Forwarded-For so the edge function treats the request as coming from localhost.
