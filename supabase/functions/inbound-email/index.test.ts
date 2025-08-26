@@ -13,18 +13,15 @@ import { test } from "node:test";
 
 // Supabase stub factory
 function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: boolean; budgetNanoUsd?: number } = {}) {
-  const state = { raw_emails: [], tasks: [...initialTasks], budget: opts.budgetNanoUsd ?? 1_000_000_000 };
+  const state = {
+    raw_emails: [],
+    tasks: [...initialTasks],
+    budget: opts.budgetNanoUsd ?? 1_000_000_000,
+    aliases: [{ alias: "u_1@in.emailinator.app", user_id: "user-1", active: true }],
+  };
   let insertAttempts = 0;
   return {
     state,
-    auth: {
-      async getUser(token: string) {
-        if (token === "valid") {
-          return { data: { user: { id: "user-1" } }, error: null };
-        }
-        return { data: { user: null }, error: new Error("invalid token") };
-      },
-    },
     from(table: string) {
       if (table === "raw_emails") {
         return {
@@ -138,6 +135,24 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
           },
         };
       }
+      if (table === "email_aliases") {
+        return {
+          select() {
+            const builder: any = {
+              _filters: [] as ((r: any) => boolean)[],
+              eq(field: string, value: any) {
+                this._filters.push((r: any) => r[field] === value);
+                return builder;
+              },
+              maybeSingle() {
+                const data = state.aliases.filter((r) => builder._filters.every((f: any) => f(r)));
+                return { data: data[0] ?? null, error: null };
+              },
+            };
+            return builder;
+          },
+        };
+      }
       throw new Error("unknown table");
     },
   };
@@ -164,32 +179,50 @@ function createFetchStub(returnTasks: any[], opts: { fail?: boolean } = {}) {
   return fetchFn as typeof fetch & { calls: any[] };
 }
 
-test("handles auth correctly", async () => {
+const BASIC_USER = "user";
+const BASIC_PASS = "pass";
+const ALLOWED_IP = "1.1.1.1";
+
+function makeHandler(supabase: any, fetchStub: any) {
+  return createHandler({
+    supabase,
+    fetch: fetchStub,
+    openAiApiKey: "test",
+    basicUser: BASIC_USER,
+    basicPassword: BASIC_PASS,
+    allowedIps: [ALLOWED_IP],
+  });
+}
+
+function makeReq(payload: any, opts: { auth?: boolean; ip?: string } = {}) {
+  const body = JSON.stringify({ to_email: "u_1@in.emailinator.app", ...payload });
+  const headers: Record<string, string> = {};
+  if (opts.auth !== false) {
+    headers["authorization"] =
+      "Basic " + Buffer.from(`${BASIC_USER}:${BASIC_PASS}`).toString("base64");
+  }
+  headers["x-forwarded-for"] = opts.ip ?? ALLOWED_IP;
+  return new Request("http://localhost", { method: "POST", headers, body });
+}
+
+test("handles auth and IP correctly", async () => {
   const supabase = createSupabaseStub();
   const fetchStub = createFetchStub([]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  let res = await handler(new Request("http://localhost", { method: "POST" }));
+  let res = await handler(makeReq({ text_body: "email" }, { auth: false }));
   assertEquals(res.status, 401);
 
-  res = await handler(
-    new Request("http://localhost", { method: "POST", headers: { authorization: "Bearer bad" } }),
-  );
+  res = await handler(makeReq({ text_body: "email" }, { ip: "2.2.2.2" }));
   assertEquals(res.status, 401);
 });
 
 test("hits OpenAI API to extract tasks", async () => {
   const supabase = createSupabaseStub();
   const fetchStub = createFetchStub([]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "hello" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "hello" }));
   assertEquals(res.status, 200);
   assertEquals(fetchStub.calls.length, 1);
 });
@@ -197,15 +230,9 @@ test("hits OpenAI API to extract tasks", async () => {
 test("skips processing when budget depleted", async () => {
   const supabase = createSupabaseStub([], { budgetNanoUsd: 0 });
   const fetchStub = createFetchStub([{ title: "New" }]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   assertEquals(res.status, 200);
   assertEquals(fetchStub.calls.length, 0);
   assertEquals(supabase.state.raw_emails.length, 1);
@@ -218,15 +245,9 @@ test("passes existing tasks and stores new set", async () => {
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([{ title: "New Task" }]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   assertEquals(res.status, 200);
   assert(fetchStub.calls[0].init.body.includes("Old Task"));
   assertEquals(supabase.state.tasks.length, 1);
@@ -241,15 +262,9 @@ test("keeps DB unchanged if extraction fails", async () => {
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([], { fail: true });
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   assertEquals(res.status, 400);
   assertEquals(supabase.state.tasks.length, 1);
   assertEquals(supabase.state.tasks[0].title, "Keep");
@@ -261,15 +276,9 @@ test("rolls back tasks if inserting new tasks fails", async () => {
   ];
   const supabase = createSupabaseStub(existing, { failTaskInsert: true });
   const fetchStub = createFetchStub([{ title: "New" }]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   assertEquals(res.status, 500);
   assertEquals(supabase.state.tasks.length, 1);
   assertEquals(supabase.state.tasks[0].title, "Old");
@@ -288,15 +297,9 @@ test("sanitizes invalid task fields", async () => {
       student_requirement_level: "MANDATORY",
     },
   ]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   assertEquals(res.status, 200);
   const stored = supabase.state.tasks[0];
   assertEquals(stored.due_date, null);
@@ -312,20 +315,14 @@ test("logs OpenAI response when task insert fails", async () => {
   ];
   const supabase = createSupabaseStub(existing, { failTaskInsert: true });
   const fetchStub = createFetchStub([{ title: "New" }]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
   const errors: string[] = [];
   const orig = console.error;
   console.error = (...args: any[]) => {
     errors.push(args.join(" "));
   };
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   console.error = orig;
   assertEquals(res.status, 500);
   const combined = errors.join(" ");
@@ -339,15 +336,9 @@ test("handles zero tasks correctly", async () => {
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   assertEquals(res.status, 200);
   const body = await res.json();
   assertEquals(body.task_count, 0);
@@ -357,7 +348,7 @@ test("handles zero tasks correctly", async () => {
 test("detects duplicate emails by Message-ID", async () => {
   const supabase = createSupabaseStub();
   const fetchStub = createFetchStub([]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
   const payload = {
     text_body: "email",
@@ -365,22 +356,10 @@ test("detects duplicate emails by Message-ID", async () => {
     date: "Mon, 20 Jan 2025 10:00:00 +0000",
   };
 
-  let res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify(payload),
-    }),
-  );
+  let res = await handler(makeReq(payload));
   assertEquals(res.status, 200);
 
-  res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify(payload),
-    }),
-  );
+  res = await handler(makeReq(payload));
   assertEquals(res.status, 409);
   assertEquals(supabase.state.raw_emails.length, 1);
 });
@@ -388,32 +367,19 @@ test("detects duplicate emails by Message-ID", async () => {
 test("dedupes emails without Message-ID using other fields", async () => {
   const supabase = createSupabaseStub();
   const fetchStub = createFetchStub([]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
   const payload = {
     text_body: "email",
     from_email: "a@example.com",
-    to_email: "b@example.com",
     subject: "Hello",
     date: "Mon, 20 Jan 2025 10:00:00 +0000",
   };
 
-  let res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify(payload),
-    }),
-  );
+  let res = await handler(makeReq(payload));
   assertEquals(res.status, 200);
 
-  res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify(payload),
-    }),
-  );
+  res = await handler(makeReq(payload));
   assertEquals(res.status, 409);
   assertEquals(supabase.state.raw_emails.length, 1);
 });
@@ -425,15 +391,9 @@ test("only pending tasks are deduped", async () => {
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([{ title: "New" }]);
-  const handler = createHandler({ supabase, fetch: fetchStub, openAiApiKey: "test" });
+  const handler = makeHandler(supabase, fetchStub);
 
-  const res = await handler(
-    new Request("http://localhost", {
-      method: "POST",
-      headers: { authorization: "Bearer valid" },
-      body: JSON.stringify({ text_body: "email" }),
-    }),
-  );
+  const res = await handler(makeReq({ text_body: "email" }));
   assertEquals(res.status, 200);
   const body = fetchStub.calls[0].init.body;
   assert(body.includes("Pending"));

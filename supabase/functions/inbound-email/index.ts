@@ -16,23 +16,48 @@ export interface Deps {
   supabase: any;
   fetch: typeof fetch;
   openAiApiKey: string;
+  basicUser: string;
+  basicPassword: string;
+  allowedIps: string[];
+}
+function encodeBase64(str: string): string {
+  if (typeof btoa === "function") return btoa(str);
+  return Buffer.from(str).toString("base64");
 }
 
-export function createHandler({ supabase, fetch, openAiApiKey }: Deps) {
+export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicPassword, allowedIps }: Deps) {
   return async function handler(req: Request): Promise<Response> {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-    // Authenticate using the caller's Supabase JWT
-    const auth = req.headers.get("authorization")?.split("Bearer ")[1];
-    if (!auth) return new Response("Unauthorized", { status: 401 });
+    const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+    const ip = ipHeader.split(",")[0].trim();
+    if (allowedIps.length > 0 && !allowedIps.includes(ip)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(auth);
-    if (authError || !user) return new Response("Unauthorized", { status: 401 });
+    const auth = req.headers.get("authorization") ?? "";
+    const [scheme, encoded] = auth.split(" ");
+    const expected = encodeBase64(`${basicUser}:${basicPassword}`);
+    if (scheme !== "Basic" || encoded !== expected) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    const rawBody = await req.text();
 
     try {
-      const payload = await req.json() as InboundPayload;
+      const payload = JSON.parse(rawBody) as InboundPayload;
 
-      const user_id = user.id;
+      const alias = (payload.to_email ?? "").toLowerCase();
+      const { data: aliasRow, error: aliasError } = await supabase
+        .from("email_aliases")
+        .select("user_id")
+        .eq("alias", alias)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (aliasError || !aliasRow) return new Response("Unknown alias", { status: 404 });
+
+      const user_id = aliasRow.user_id;
 
       const sentAt = payload.date ? new Date(payload.date).toISOString() : null;
       const messageId = payload.message_id ?? null;
@@ -190,6 +215,19 @@ if (import.meta.main) {
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
-  const handler = createHandler({ supabase, fetch, openAiApiKey: OPENAI_API_KEY });
+  const POSTMARK_BASIC_USER = Deno.env.get("POSTMARK_BASIC_USER")!;
+  const POSTMARK_BASIC_PASSWORD = Deno.env.get("POSTMARK_BASIC_PASSWORD")!;
+  const POSTMARK_ALLOWED_IPS = (Deno.env.get("POSTMARK_ALLOWED_IPS") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const handler = createHandler({
+    supabase,
+    fetch,
+    openAiApiKey: OPENAI_API_KEY,
+    basicUser: POSTMARK_BASIC_USER,
+    basicPassword: POSTMARK_BASIC_PASSWORD,
+    allowedIps: POSTMARK_ALLOWED_IPS,
+  });
   Deno.serve(handler);
 }

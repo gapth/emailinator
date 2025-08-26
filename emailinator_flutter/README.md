@@ -28,14 +28,14 @@ samples, guidance on mobile development, and a full API reference.
 To run the app in a Chrome browser:
 
 ```bash
-flutter run -d chrome
+flutter run -d chrome --dart-define-from-file=.env.local.json 
 ```
 
 ### Running on iOS
 
 1.  **Simulator**: To run on the iOS Simulator, make sure you have Xcode installed. Then, open the simulator by running `open -a Simulator`. Finally, run:
     ```bash
-    flutter run
+    flutter run --dart-define-from-file=.env.local.json 
     ```
 2.  **Physical Device**: To run on a physical iOS device, connect it to your Mac, and follow the instructions in the Flutter documentation to set up your device for development. Then run `flutter run`.
 
@@ -43,6 +43,6 @@ flutter run -d chrome
 
 1.  **Emulator**: To run on an Android emulator, make sure you have Android Studio installed and an emulator configured. Launch the emulator, then run:
     ```bash
-    flutter run
+    flutter run --dart-define-from-file=.env.local.json 
     ```
 2.  **Physical Device**: To run on a physical Android device, connect it to your computer, enable developer options and USB debugging, and then run `flutter run`.

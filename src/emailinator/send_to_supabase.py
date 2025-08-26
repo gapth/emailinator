@@ -1,5 +1,6 @@
 import argparse
 import email
+import os
 from pathlib import Path
 from email.message import Message
 from email.header import decode_header, make_header
@@ -62,19 +63,21 @@ def _extract_bodies(msg: Message) -> tuple[str | None, str | None]:
 
 
 def main() -> None:
+    user = os.getenv("POSTMARK_BASIC_USER")
+    password = os.getenv("POSTMARK_BASIC_PASSWORD")
+    if not user or not password:
+        raise EnvironmentError(
+            "POSTMARK_BASIC_USER and POSTMARK_BASIC_PASSWORD must be set in the environment"
+        )
+
     parser = argparse.ArgumentParser(
         description="Submit a .eml file to the Supabase inbound-email function",
     )
     parser.add_argument("--file", required=True, help="Path to .eml file")
     parser.add_argument(
         "--url",
-        default="http://localhost:54321/functions/v1/inbound-email",
+        default=f"http://{user}:{password}@localhost:54321/functions/v1/inbound-email",
         help="Supabase inbound-email function URL",
-    )
-    parser.add_argument(
-        "--access-token",
-        required=True,
-        help="Supabase JWT for the user",
     )
     args = parser.parse_args()
 
@@ -97,12 +100,9 @@ def main() -> None:
         "provider_meta": {"source": "cli"},
     }
 
-    headers = {
-        "Authorization": f"Bearer {args.access_token}",
-        "Content-Type": "application/json",
-    }
-
-    resp = requests.post(args.url, headers=headers, json=payload)
+    # Force X-Forwarded-For so the edge function treats the request as coming from localhost.
+    headers = {"X-Forwarded-For": "127.0.0.1"}
+    resp = requests.post(args.url, json=payload, auth=(user, password), headers=headers)
     print(f"Status: {resp.status_code}")
     try:
         print(resp.json())
