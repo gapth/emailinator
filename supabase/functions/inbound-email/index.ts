@@ -20,28 +20,23 @@ export interface Deps {
   basicPassword: string;
   allowedIps: string[];
 }
-function encodeBase64(str: string): string {
-  if (typeof btoa === "function") return btoa(str);
-  return Buffer.from(str).toString("base64");
-}
 
 export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicPassword, allowedIps }: Deps) {
   return async function handler(req: Request): Promise<Response> {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
-    console.info(`Incoming email with req.headers: ${JSON.stringify(req.headers)})`);
+    const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+    const ip = ipHeader.split(",")[0].trim();
+    if (allowedIps.length > 0 && !allowedIps.includes(ip)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
-    // const ipHeader = req.headers.get("x-forwarded-for") ?? "";
-    // const ip = ipHeader.split(",")[0].trim();
-    // if (allowedIps.length > 0 && !allowedIps.includes(ip)) {
-    //   return new Response("Unauthorized", { status: 401 });
-    // }
-
-    // const auth = req.headers.get("authorization") ?? "";
-    // const [scheme, encoded] = auth.split(" ");
-    // const expected = encodeBase64(`${basicUser}:${basicPassword}`);
-    // if (scheme !== "Basic" || encoded !== expected) {
-    //   return new Response("Unauthorized", { status: 401 });
-    // }
+    const auth = req.headers.get("authorization") ?? "";
+    const [scheme, encoded] = auth.split(" ");
+    const decoded = atob(encoded);
+    const expected = `${basicUser}:${basicPassword}`;
+    if (scheme !== "Basic" || decoded !== expected) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
     const rawBody = await req.text();
 
@@ -49,8 +44,8 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
       const payload = JSON.parse(rawBody) as InboundPayload;
 
       const alias = (payload.To ?? "").toLowerCase();
-      console.info(`Payload: ${JSON.stringify(payload)}`);
-      console.info(`Alias: ${alias}`);
+      console.info(`[inbound-email] Payload: ${JSON.stringify(payload)}`);
+      console.info(`[inbound-email] Alias: ${alias}`);
       const { data: aliasRow, error: aliasError } = await supabase
         .from("email_aliases")
         .select("user_id")
