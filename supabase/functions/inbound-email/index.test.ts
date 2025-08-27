@@ -18,6 +18,7 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
     tasks: [...initialTasks],
     budget: opts.budgetNanoUsd ?? 1_000_000_000,
     aliases: [{ alias: "u_1@in.emailinator.app", user_id: "user-1", active: true }],
+    forwarding_verifications: [] as any[],
   };
   let insertAttempts = 0;
   return {
@@ -153,6 +154,15 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
           },
         };
       }
+      if (table === "forwarding_verifications") {
+        return {
+          insert(row: any) {
+            const id = state.forwarding_verifications.length + 1;
+            state.forwarding_verifications.push({ id, ...row });
+            return { data: { id }, error: null };
+          },
+        };
+      }
       throw new Error("unknown table");
     },
   };
@@ -231,6 +241,28 @@ test("extracts alias from forwarded fields", async () => {
 
   const res = await handler(makeReq(payload));
   assertEquals(res.status, 200);
+});
+
+test("stores forwarding verification link", async () => {
+  const supabase = createSupabaseStub();
+  const fetchStub = createFetchStub([]);
+  const handler = makeHandler(supabase, fetchStub);
+
+  const link = "https://mail-settings.google.com/mail/vf-sample";
+  const res = await handler(
+    makeReq({
+      From: "forwarding-noreply@google.com",
+      Subject: "(Gmail Forwarding Confirmation - Receive Mail from test@example.com",
+      TextBody: `please confirm: ${link}`,
+    }),
+  );
+
+  assertEquals(res.status, 200);
+  assertEquals(supabase.state.forwarding_verifications.length, 1);
+  assertEquals(
+    supabase.state.forwarding_verifications[0].verification_link,
+    link,
+  );
 });
 
 test("hits OpenAI API to extract tasks", async () => {

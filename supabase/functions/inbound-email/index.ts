@@ -12,6 +12,23 @@ type InboundPayload = {
   provider_meta?: Record<string, any>;
 };
 
+function extractForwardVerificationLink(payload: any): string | null {
+  const from = (payload.From ?? payload.from_email ?? "").toLowerCase();
+  const subject = (payload.Subject ?? payload.subject ?? "").toLowerCase();
+  const text_body = (payload.text_body ?? (payload as any).TextBody ?? "") as string;
+  const html_body = (payload.html_body ?? (payload as any).HtmlBody ?? "") as string;
+  const body = chooseEmailText({ text_body, html_body }) ?? "";
+
+  let match: RegExpMatchArray | null = null;
+  if (from.includes("forwarding-noreply@google.com") || subject.includes("gmail forwarding confirmation")) {
+    match = body.match(/https:\/\/mail-settings\.google\.com\/mail\/[^\s]+/i);
+  }
+  if (!match && subject.includes("forward") && (subject.includes("confirm") || subject.includes("verification"))) {
+    match = body.match(/https?:\/\/[^\s]+/i);
+  }
+  return match ? match[0] : null;
+}
+
 export interface Deps {
   supabase: any;
   fetch: typeof fetch;
@@ -93,6 +110,19 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
       if (aliasError || !aliasRow) return new Response("Unknown alias", { status: 404 });
 
       const user_id = aliasRow.user_id;
+
+      const verificationLink = extractForwardVerificationLink(payload);
+      if (verificationLink) {
+        await supabase.from("forwarding_verifications").insert({
+          user_id,
+          alias,
+          from_email: payload.From ?? null,
+          subject: payload.Subject ?? null,
+          verification_link: verificationLink,
+        });
+        console.info(`[inbound-email] Forwarding verification captured: ${verificationLink}`);
+        return new Response("Forwarding verification captured", { status: 200 });
+      }
 
       const sentAt = payload.Date ? new Date(payload.Date).toISOString() : null;
       const messageId = payload.MessageID ?? null;

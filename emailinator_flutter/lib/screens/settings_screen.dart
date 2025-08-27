@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -13,6 +14,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _parentRequirementLevels = [];
   final List<String> _allLevels = ['NONE', 'OPTIONAL', 'VOLUNTEER', 'MANDATORY'];
   String? _forwardAlias;
+  String? _verificationLink;
+  int? _verificationId;
 
   @override
   void initState() {
@@ -53,6 +56,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _forwardAlias = alias;
     }
 
+    final verificationRow = await Supabase.instance.client
+        .from('forwarding_verifications')
+        .select('id, verification_link')
+        .eq('user_id', userId)
+        .isFilter('clicked_at', null)
+        .order('created_at', ascending: false)
+        .maybeSingle();
+
+    if (verificationRow != null) {
+      _verificationId = verificationRow['id'] as int?;
+      _verificationLink = verificationRow['verification_link'] as String?;
+    }
+
     if (mounted) {
       setState(() {});
     }
@@ -81,6 +97,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _launchVerification() async {
+    if (_verificationLink == null) return;
+    final uri = Uri.parse(_verificationLink!);
+    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (_verificationId != null) {
+        await Supabase.instance.client
+            .from('forwarding_verifications')
+            .update({'clicked_at': DateTime.now().toIso8601String()})
+            .eq('id', _verificationId ?? 0);
+      }
+      if (mounted) {
+        setState(() {
+          _verificationLink = null;
+          _verificationId = null;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,6 +131,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: EdgeInsets.all(16.0),
         children: [
+          if (_verificationLink != null)
+            Card(
+              color: Colors.amber[100],
+              child: ListTile(
+                title: Text('Click here to verify the forward address.'),
+                onTap: _launchVerification,
+              ),
+            ),
+          if (_verificationLink != null) SizedBox(height: 16),
           if (_forwardAlias != null)
             ListTile(
               title: Text('Forward to this address'),
