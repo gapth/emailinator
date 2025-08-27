@@ -6,24 +6,77 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 
-class TaskListItem extends StatelessWidget {
+class TaskListItem extends StatefulWidget {
   final Task task;
 
   const TaskListItem({Key? key, required this.task}) : super(key: key);
 
-  Future<void> _updateTaskStatus(BuildContext context, String status) async {
-    try {
-      await Supabase.instance.client
-          .from('tasks')
-          .update({'status': status})
-          .eq('id', task.id);
-      
-      Provider.of<AppState>(context, listen: false).removeTask(task.id);
+  @override
+  State<TaskListItem> createState() => _TaskListItemState();
+}
 
+class _TaskListItemState extends State<TaskListItem> {
+  bool _isProcessing = false;
+
+  Future<void> _updateTaskStatus(String status) async {
+    if (_isProcessing) return; // guard against double triggers
+    setState(() => _isProcessing = true);
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    final task = widget.task;
+    final originalStatus = task.status;
+
+    // Optimistic remove
+    appState.removeTask(task.id);
+
+    bool undoRequested = false;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          status == 'DONE'
+              ? 'Marked task as done'
+              : 'Dismissed task',
+        ),
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () async {
+            undoRequested = true;
+            appState.addTask(task); // restore locally
+            try {
+              await Supabase.instance.client
+                  .from('tasks')
+                  .update({'status': originalStatus})
+                  .eq('id', task.id);
+            } catch (e) {
+              messenger.showSnackBar(
+                SnackBar(content: Text('Failed to undo: $e')),
+              );
+            }
+          },
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+
+    try {
+    await Supabase.instance.client
+      .from('tasks')
+      .update({'status': status})
+      .eq('id', task.id);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update task: $e')),
-      );
+      // Rollback on failure
+      if (!undoRequested) {
+        appState.addTask(task);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update task: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -31,6 +84,7 @@ class TaskListItem extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) {
+        final task = widget.task;
         final lines = <Widget>[];
 
         Widget addSection(String label, String? value) {
@@ -91,47 +145,53 @@ class TaskListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Slidable(
-      key: ValueKey(task.id),
-      startActionPane: ActionPane(
-        motion: const DrawerMotion(),
-        children: [
-          SlidableAction(
-            onPressed: (context) => _updateTaskStatus(context, 'DISMISSED'),
-            backgroundColor: Colors.grey,
-            foregroundColor: Colors.white,
-            icon: Icons.do_not_disturb,
-            label: 'Dismiss',
+    final task = widget.task;
+    return Opacity(
+      opacity: _isProcessing ? 0.5 : 1,
+      child: IgnorePointer(
+        ignoring: _isProcessing,
+        child: Slidable(
+          key: ValueKey(task.id),
+            startActionPane: ActionPane(
+              motion: const DrawerMotion(),
+              dismissible: DismissiblePane(onDismissed: () => _updateTaskStatus('DISMISSED')),
+              children: [
+                SlidableAction(
+                  onPressed: (context) => _updateTaskStatus('DISMISSED'),
+                  backgroundColor: Colors.grey,
+                  foregroundColor: Colors.white,
+                  icon: Icons.do_not_disturb,
+                  label: 'Dismiss',
+                ),
+              ],
+            ),
+            endActionPane: ActionPane(
+              motion: const DrawerMotion(),
+              dismissible: DismissiblePane(onDismissed: () => _updateTaskStatus('DONE')),
+              children: [
+                SlidableAction(
+                  onPressed: (context) => _updateTaskStatus('DONE'),
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  icon: Icons.check_circle,
+                  label: 'Done',
+                ),
+              ],
+            ),
+            child: ListTile(
+              title: Text(task.title),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (task.dueDate != null)
+                    Text('Due: ${task.dueDate.toString().substring(0, 10)}'),
+                  if (task.parentRequirementLevel != null)
+                    Text('Parent requirement: ${task.parentRequirementLevel}'),
+                ],
+              ),
+              onTap: () => _showDetails(context),
+            ),
           ),
-        ],
-      ),
-      endActionPane: ActionPane(
-        motion: const DrawerMotion(),
-        dismissible: DismissiblePane(onDismissed: () {
-          _updateTaskStatus(context, 'DONE');
-        }),
-        children: [
-          SlidableAction(
-            onPressed: (context) => _updateTaskStatus(context, 'DONE'),
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
-            icon: Icons.check_circle,
-            label: 'Done',
-          ),
-        ],
-      ),
-      child: ListTile(
-        title: Text(task.title),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (task.dueDate != null)
-              Text('Due: ${task.dueDate.toString().substring(0, 10)}'),
-            if (task.parentRequirementLevel != null)
-              Text('Parent requirement: ${task.parentRequirementLevel}'),
-          ],
-        ),
-        onTap: () => _showDetails(context),
       ),
     );
   }

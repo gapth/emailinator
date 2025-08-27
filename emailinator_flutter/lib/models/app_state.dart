@@ -76,4 +76,12 @@ class AppState extends ChangeNotifier {
     _tasks.removeWhere((task) => task.id == taskId);
     notifyListeners();
   }
+
+  void addTask(Task task) {
+    // Avoid duplicates if already present
+    if (_tasks.indexWhere((t) => t.id == task.id) == -1) {
+      _tasks.add(task);
+      notifyListeners();
+    }
+  }
 }
