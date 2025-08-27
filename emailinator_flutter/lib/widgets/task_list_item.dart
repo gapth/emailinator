@@ -25,6 +25,8 @@ class _TaskListItemState extends State<TaskListItem> {
     final appState = Provider.of<AppState>(context, listen: false);
     final task = widget.task;
     final originalStatus = task.status;
+  // Record original index so we can restore ordering on undo
+  final originalIndex = appState.tasks.indexWhere((t) => t.id == task.id);
 
     // Optimistic remove
     appState.removeTask(task.id);
@@ -43,7 +45,8 @@ class _TaskListItemState extends State<TaskListItem> {
           label: 'UNDO',
           onPressed: () async {
             undoRequested = true;
-            appState.addTask(task); // restore locally
+            // Restore at original index (fallback to end if somehow not found)
+            appState.insertTaskAt(task, originalIndex == -1 ? appState.tasks.length : originalIndex);
             try {
               await Supabase.instance.client
                   .from('tasks')
@@ -68,7 +71,7 @@ class _TaskListItemState extends State<TaskListItem> {
     } catch (e) {
       // Rollback on failure
       if (!undoRequested) {
-        appState.addTask(task);
+  appState.insertTaskAt(task, originalIndex == -1 ? appState.tasks.length : originalIndex);
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -84,4 +84,15 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Insert a task back at a specific index (used for undo operations).
+  /// If the index is out of range it will be clamped to the valid bounds.
+  /// Will not insert if a task with the same id already exists.
+  void insertTaskAt(Task task, int index) {
+    if (_tasks.indexWhere((t) => t.id == task.id) != -1) return; // already present
+    if (index < 0) index = 0;
+    if (index > _tasks.length) index = _tasks.length;
+    _tasks.insert(index, task);
+    notifyListeners();
+  }
 }
