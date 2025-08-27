@@ -97,7 +97,6 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
       }
 
       const alias = extractAlias(payload);
-      console.info(`[inbound-email] Payload: ${JSON.stringify(payload)}`);
       console.info(`[inbound-email] Alias: ${alias}`);
       if (!alias) return new Response("Unknown alias", { status: 404 });
       const { data: aliasRow, error: aliasError } = await supabase
@@ -153,7 +152,7 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
       }
 
       const emailText = chooseEmailText(payload);
-      console.info(`[inbound-email] user=${user_id} email_text=${emailText}`);
+      console.info(`[inbound-email] user=${user_id} email_text_length=${emailText.length}`);
 
       const { data: existingRaw, error: existingError } = await supabase
         .from("tasks")
