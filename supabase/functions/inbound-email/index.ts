@@ -32,7 +32,12 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
 
     const auth = req.headers.get("authorization") ?? "";
     const [scheme, encoded] = auth.split(" ");
-    const decoded = atob(encoded);
+    let decoded: string;
+    try {
+      decoded = atob(encoded ?? "");
+    } catch {
+      return new Response("Unauthorized", { status: 401 });
+    }
     const expected = `${basicUser}:${basicPassword}`;
     if (scheme !== "Basic" || decoded !== expected) {
       return new Response("Unauthorized", { status: 401 });
@@ -43,9 +48,41 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
     try {
       const payload = JSON.parse(rawBody) as InboundPayload;
 
-      const alias = (payload.To ?? "").toLowerCase();
+      function extractAlias(data: any): string | null {
+        const inboundDomain = ((typeof Deno !== "undefined" && Deno.env.get("INBOUND_EMAIL_DOMAIN")) || "in.emailinator.app").toLowerCase();
+        const suffix = "@" + inboundDomain;
+        const candidates: string[] = [];
+
+        if (typeof (data as any).OriginalRecipient === "string") {
+          candidates.push((data as any).OriginalRecipient);
+        }
+        for (const field of ["ToFull", "CcFull", "BccFull"] as const) {
+          const arr = (data as any)[field];
+          if (Array.isArray(arr)) {
+            for (const item of arr) {
+              if (item?.Email) candidates.push(item.Email);
+            }
+          }
+        }
+        for (const field of ["To", "Cc", "Bcc"] as const) {
+          const val = (data as any)[field];
+          if (typeof val === "string") {
+            const match = val.match(/<([^>]+)>/);
+            candidates.push(match ? match[1] : val);
+          }
+        }
+
+        for (const email of candidates) {
+          const lower = email.toLowerCase();
+          if (lower.endsWith(suffix)) return lower;
+        }
+        return null;
+      }
+
+      const alias = extractAlias(payload);
       console.info(`[inbound-email] Payload: ${JSON.stringify(payload)}`);
       console.info(`[inbound-email] Alias: ${alias}`);
+      if (!alias) return new Response("Unknown alias", { status: 404 });
       const { data: aliasRow, error: aliasError } = await supabase
         .from("email_aliases")
         .select("user_id")

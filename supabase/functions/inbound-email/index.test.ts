@@ -217,6 +217,22 @@ test("handles auth and IP correctly", async () => {
   assertEquals(res.status, 401);
 });
 
+test("extracts alias from forwarded fields", async () => {
+  const supabase = createSupabaseStub();
+  const fetchStub = createFetchStub([]);
+  const handler = makeHandler(supabase, fetchStub);
+
+  const payload = {
+    To: '"Real User" <real@example.com>',
+    ToFull: [{ Email: "real@example.com", Name: "Real User", MailboxHash: "" }],
+    Bcc: "u_1@in.emailinator.app",
+    BccFull: [{ Email: "u_1@in.emailinator.app", Name: "", MailboxHash: "" }],
+  };
+
+  const res = await handler(makeReq(payload));
+  assertEquals(res.status, 200);
+});
+
 test("hits OpenAI API to extract tasks", async () => {
   const supabase = createSupabaseStub();
   const fetchStub = createFetchStub([]);
