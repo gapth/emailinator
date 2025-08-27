@@ -15,8 +15,8 @@ type InboundPayload = {
 function extractForwardVerificationLink(payload: any): string | null {
   const from = (payload.From ?? payload.from_email ?? "").toLowerCase();
   const subject = (payload.Subject ?? payload.subject ?? "").toLowerCase();
-  const text_body = (payload.text_body ?? (payload as any).TextBody ?? "") as string;
-  const html_body = (payload.html_body ?? (payload as any).HtmlBody ?? "") as string;
+  const text_body = (payload.TextBody ?? payload.text_body ?? "") as string;
+  const html_body = (payload.HtmlBody ?? payload.html_body ?? "") as string;
   const body = chooseEmailText({ text_body, html_body }) ?? "";
 
   let match: RegExpMatchArray | null = null;
@@ -153,6 +153,7 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
       }
 
       const emailText = chooseEmailText(payload);
+      console.info(`[inbound-email] user=${user_id} email_text=${emailText}`);
 
       const { data: existingRaw, error: existingError } = await supabase
         .from("tasks")

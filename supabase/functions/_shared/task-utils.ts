@@ -215,9 +215,10 @@ export async function extractDeduplicatedTasks(
   return { tasks, promptTokens, completionTokens, rawContent: content };
 }
 
-export function chooseEmailText(payload: { text_body?: string; html_body?: string }) {
-  const plain = payload.text_body ?? "";
-  const html = payload.html_body ?? "";
+export function chooseEmailText(payload: { TextBody?: string; HtmlBody?: string; text_body?: string; html_body?: string; textBody?: string; htmlBody?: string }) {
+  // Accept multiple casing / naming variants from different sources (Postmark, DB rows, internal JSON)
+  const plain = payload.TextBody ?? payload.text_body ?? payload.textBody ?? "";
+  const html = payload.HtmlBody ?? payload.html_body ?? payload.htmlBody ?? "";
   return plain && (html.length === 0 || plain.length >= TEXT_BODY_MIN_RATIO_OF_HTML * html.length) ? plain : (html || "");
 }
 
