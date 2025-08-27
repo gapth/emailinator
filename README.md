@@ -1,21 +1,14 @@
 # Emailinator
 
-Emailinator now relies on Supabase for storage and Edge Functions for task extraction. The legacy Python FastAPI service has been removed.
+Emailinator helps parents manage school emails—and eventually other communications—by focusing on the tasks they need to handle. Users forward messages to the system, which extracts actionable tasks and lets each family decide how involved the assistant should be.
 
-## Static test page
+## High-level architecture
 
-A simple HTML page for testing Supabase authentication and task listings is available at `index.html`.
-
-Serve it locally with a basic HTTP server:
-
-```bash
-SUPABASE_URL=<url> SUPABASE_ANON_KEY=<anon-key> make serve
-# or generate env.js yourself and run
-python -m http.server --directory src/emailinator/templates 8000
-```
-
-Then open [http://localhost:8000](http://localhost:8000) in your browser.
-The Makefile writes these values to `env.js` so the page can initialize the Supabase client.
+- **Supabase** provides the database, server logic, and authentication.
+- **OpenAI** performs task extraction.
+- **Cloudflare** DNS to point `in.emailinator.app` to **Postmark**, which forwards messages to a **Supabase** webhook for processing.
+- **Flutter** powers the web, Android, and iOS apps.
+- **Cloudflare** hosts the web experience.
 
 ## Development
 

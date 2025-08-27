@@ -6,7 +6,7 @@ STAMP := $(VENV)/.requirements.stamp
 # Default target: run tests
 default: test
 
-.PHONY: venv install test serve clean
+.PHONY: venv install test clean
 
 # Create virtual environment if it doesn't exist
 venv:
@@ -36,8 +36,3 @@ test: install
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache
 	find . -type d -name "__pycache__" -exec rm -rf {} +
-
-# Serve the static test page locally at http://localhost:8000
-serve:
-	@printf "window.SUPABASE_URL = \"%s\";\nwindow.SUPABASE_ANON_KEY = \"%s\";\n" "$(SUPABASE_URL)" "$(SUPABASE_ANON_KEY)" > src/emailinator/templates/env.js
-	$(PYTHON) -m http.server --directory src/emailinator/templates 8000
