@@ -248,12 +248,17 @@ export async function replaceTasksAndUpdateEmail(
   const inputCostNano = promptTokens * INPUT_NANO_USD_PER_TOKEN;
   const outputCostNano = completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
 
-  const { error: delError } = await supabase
-    .from("tasks")
-    .delete()
-    .eq("user_id", userId)
-    .eq("status", "PENDING");
-  if (delError) return { success: false, taskCount: 0, error: delError.message };
+  // Delete exactly the tasks that were passed in (more reliable than duplicating query logic)
+  if (existingRows.length > 0) {
+    const existingIds = existingRows.map((row: any) => row.id).filter((id: any) => id != null);
+    if (existingIds.length > 0) {
+      const { error: delError } = await supabase
+        .from("tasks")
+        .delete()
+        .in("id", existingIds);
+      if (delError) return { success: false, taskCount: 0, error: delError.message };
+    }
+  }
 
   if (tasks.length > 0) {
     const rows = tasks.map((t: any) => ({
@@ -277,8 +282,11 @@ export async function replaceTasksAndUpdateEmail(
       console.error(
         `[${logPrefix}] user=${userId} task_insert_failed: ${insertError.message} openai_response=${rawContent}`,
       );
-      const restoreRows = existingRows.map(({ id, ...r }: any) => r);
-      await supabase.from("tasks").insert(restoreRows);
+      // Restore the exact rows that were deleted
+      if (existingRows.length > 0) {
+        const restoreRows = existingRows.map(({ id, ...r }: any) => r);
+        await supabase.from("tasks").insert(restoreRows);
+      }
       return { success: false, taskCount: 0, error: insertError.message };
     }
   }
@@ -297,13 +305,16 @@ export async function replaceTasksAndUpdateEmail(
     console.error(
       `[${logPrefix}] user=${userId} raw_email_update_failed: ${updateError.message} openai_response=${rawContent}`,
     );
+    // Delete the newly inserted tasks and restore the original ones
     await supabase
       .from("tasks")
       .delete()
       .eq("user_id", userId)
-      .eq("status", "PENDING");
-    const restoreRows = existingRows.map(({ id, ...r }: any) => r);
-    if (restoreRows.length > 0) await supabase.from("tasks").insert(restoreRows);
+      .eq("email_id", rawEmailId);
+    if (existingRows.length > 0) {
+      const restoreRows = existingRows.map(({ id, ...r }: any) => r);
+      await supabase.from("tasks").insert(restoreRows);
+    }
     return { success: false, taskCount: 0, error: updateError.message };
   }
 

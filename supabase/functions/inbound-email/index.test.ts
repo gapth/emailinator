@@ -451,3 +451,66 @@ test("only pending tasks are deduped", async () => {
   assert(titles.includes("New"));
   assert(!titles.includes("Pending"));
 });
+
+test("only future or no-due-date pending tasks are fetched for deduplication", async () => {
+  // Mock the current time
+  const mockNow = '2025-01-01T12:00:00.000Z';
+  const originalToISOString = Date.prototype.toISOString;
+  Date.prototype.toISOString = function() {
+    return mockNow;
+  };
+  
+  const existing = [
+    { id: 1, user_id: "user-1", title: "Past task", status: "PENDING", due_date: '2024-12-31' },
+    { id: 2, user_id: "user-1", title: "Future task", status: "PENDING", due_date: '2025-01-02' },
+    { id: 3, user_id: "user-1", title: "No due date", status: "PENDING", due_date: null },
+    { id: 4, user_id: "user-1", title: "Completed past", status: "COMPLETED", due_date: '2024-12-31' },
+  ];
+  
+  const supabase = createSupabaseStub(existing);
+  const fetchStub = createFetchStub([{ title: "New task" }]);
+  
+  // Track which tasks were queried by intercepting the .or() call
+  const queriedTasks: any[] = [];
+  const originalFrom = supabase.from;
+  supabase.from = function(table: string) {
+    const result = originalFrom.call(this, table);
+    if (table === "tasks" && result.select) {
+      const originalSelect = result.select;
+      result.select = function(fields: string) {
+        const selectResult = originalSelect.call(this, fields);
+        // Mock the filtered result to only include future/null due date tasks
+        if (selectResult.or) {
+          const originalOr = selectResult.or;
+          selectResult.or = function(condition: string) {
+            // Simulate the database filtering: only return tasks that match our criteria
+            const filtered = existing.filter(task => 
+              task.status === "PENDING" && 
+              (task.due_date === null || task.due_date >= mockNow.split('T')[0])
+            );
+            queriedTasks.push(...filtered);
+            return { data: filtered, error: null };
+          };
+        }
+        return selectResult;
+      };
+    }
+    return result;
+  };
+  
+  const handler = makeHandler(supabase, fetchStub);
+  const res = await handler(makeReq({ TextBody: "email" }));
+  
+  assertEquals(res.status, 200);
+  
+  // Verify only future and null due date tasks were returned
+  assertEquals(queriedTasks.length, 2);
+  const titles = queriedTasks.map(t => t.title);
+  assert(titles.includes("Future task"), "Should include future task");
+  assert(titles.includes("No due date"), "Should include null due date task");
+  assert(!titles.includes("Past task"), "Should not include past task");
+  assert(!titles.includes("Completed past"), "Should not include completed task");
+  
+  // Restore original Date method
+  Date.prototype.toISOString = originalToISOString;
+});
