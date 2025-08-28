@@ -133,7 +133,10 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
           .eq("message_id", messageId);
         if (dupError) return new Response(dupError.message, { status: 500 });
         if (Array.isArray(existingEmail) && existingEmail.length > 0) {
-          return new Response("Duplicate Message-ID", { status: 409 });
+          // Duplicate detected by Message-ID. Return 200 OK (not 409) so the inbound
+          // email service (e.g. Postmark) does NOT retry delivering this message.
+          // We have already processed (or intentionally stored) the original email.
+          return new Response("Duplicate Message-ID (already processed)", { status: 200 });
         }
       } else {
         const query = supabase.from("raw_emails").select("id");
