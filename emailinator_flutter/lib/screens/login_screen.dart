@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:emailinator_flutter/widgets/submit_on_enter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,6 +13,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
+  final _debounced = DebouncedSubmit();
+
+  void _attemptSubmit() {
+    FocusScope.of(context).unfocus();
+    _debounced.attempt(_signIn, isLoading: _loading);
+  }
 
   Future<void> _signIn() async {
     if (_formKey.currentState!.validate()) {
@@ -59,6 +67,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _emailController,
                   decoration: InputDecoration(labelText: 'Email'),
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
@@ -71,6 +81,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _passwordController,
                   decoration: InputDecoration(labelText: 'Password'),
                   obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) {
+                    _attemptSubmit();
+                  },
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your password';
@@ -79,12 +93,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
                 SizedBox(height: 24),
-                _loading
-                    ? CircularProgressIndicator()
-                    : ElevatedButton(
-                        onPressed: _signIn,
-                        child: Text('Sign In'),
-                      ),
+                SubmitOnEnter(
+                  enabled: !_loading,
+                  onSubmit: _attemptSubmit,
+                  child: _loading
+                      ? CircularProgressIndicator()
+                      : ElevatedButton(
+                          onPressed: _loading ? null : _attemptSubmit,
+                          child: Text('Sign In'),
+                        ),
+                ),
+                  SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pushNamed('/change-password'),
+                    child: Text('Change Password'),
+                  ),
               ],
             ),
           ),

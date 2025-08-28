@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:emailinator_flutter/screens/login_screen.dart';
 import 'package:emailinator_flutter/screens/home_screen.dart';
+import 'package:emailinator_flutter/screens/change_password_screen.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
@@ -36,7 +37,13 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: AuthGate(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => AuthGate(),
+        '/login': (context) => LoginScreen(),
+        '/home': (context) => HomeScreen(),
+        '/change-password': (context) => const ChangePasswordScreen(),
+      },
     );
   }
 }

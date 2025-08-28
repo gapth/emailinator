@@ -46,3 +46,17 @@ flutter run -d chrome --dart-define-from-file=.env.local.json
     flutter run --dart-define-from-file=.env.local.json 
     ```
 2.  **Physical Device**: To run on a physical Android device, connect it to your computer, enable developer options and USB debugging, and then run `flutter run`.
+
+## Deep Link / Change Password
+
+The change password screen is available at the universal link:
+
+https://emailinator.app/change-password
+
+Platforms:
+
+- Web: Navigating directly to that URL loads the app and routes to the change password screen.
+- Android: Intent filter in `AndroidManifest.xml` handles the link and opens the app at that route. To enable full App Links verification (skip chooser), host `/.well-known/assetlinks.json` on `emailinator.app` with your app's SHA256 cert fingerprint.
+- iOS: Add Associated Domains capability (`applinks:emailinator.app`) plus host the `apple-app-site-association` JSON (no extension) at the root (and/or `/.well-known/`). Until that’s done, users can still use the custom scheme fallback: `emailinator://change-password`.
+
+The email inbound domain `in.emailinator.app` is only used for generated forwarding aliases; do not share it for user navigation.

@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Deep link support: custom scheme fallback for change password. Primary universal link: https://emailinator.app/change-password -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>emailinator</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
