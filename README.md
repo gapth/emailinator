@@ -1,5 +1,7 @@
 # Emailinator
 
+![Tests](https://github.com/gapthirathon/emailinator/workflows/Run%20Tests/badge.svg)
+
 Emailinator helps parents manage school emails—and eventually other communications—by focusing on the tasks they need to handle. Users forward messages to the system, which extracts actionable tasks and lets each family decide how involved the assistant should be.
 
 ## High-level architecture

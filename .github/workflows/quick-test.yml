@@ -1,0 +1,55 @@
+name: Quick Tests (PR)
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quick-tests:
+    name: Quick Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          # Flutter dependencies
+          cd emailinator_flutter && flutter pub get && cd ..
+          # Node.js dependencies for Supabase tests
+          npm ci
+
+      - name: Flutter analysis and tests
+        working-directory: ./emailinator_flutter
+        run: |
+          flutter analyze
+          flutter test
+
+      - name: Supabase function tests (quick)
+        run: |
+          # Run tests using npm scripts (faster than starting full Supabase)
+          npm run test:inbound-email
+          npm run test:deposit-budget
+          npm run test:reprocess-unprocessed
+
+      - name: Python lint check
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -e .
+          pip install -r requirements.txt
+          # Basic import test to ensure no syntax errors
+          python -c "import emailinator; print('Python package imports successfully')"
