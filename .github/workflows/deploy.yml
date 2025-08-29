@@ -32,10 +32,13 @@ jobs:
               - 'requirements.txt'
               - 'pyproject.toml'
               - '**/*.py'
+              - '.github/workflows/**'
             flutter:
               - 'emailinator_flutter/**'
+              - '.github/workflows/**'
             supabase:
               - 'supabase/**'
+              - '.github/workflows/**'
 
   # Python tests - only run if Python files changed
   python-tests:
