@@ -89,8 +89,9 @@ class _TaskListItemState extends State<TaskListItem> {
         final lines = <Widget>[];
 
         Widget addSection(String label, String? value) {
-          if (value == null || value.trim().isEmpty)
+          if (value == null || value.trim().isEmpty) {
             return const SizedBox.shrink();
+          }
           return Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: RichText(

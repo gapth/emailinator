@@ -134,8 +134,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   onFieldSubmitted: (_) => _attemptSubmit(),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Confirm new password';
-                    if (v != _newPasswordController.text)
+                    if (v != _newPasswordController.text) {
                       return 'Passwords do not match';
+                    }
                     return null;
                   },
                 ),
