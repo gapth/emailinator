@@ -79,9 +79,9 @@ jobs:
         run: npm ci
 
       - name: Install Supabase CLI
-        run: |
-          curl -fsSL https://supabase.com/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
 
       - name: Start Supabase local development
         working-directory: ./supabase
