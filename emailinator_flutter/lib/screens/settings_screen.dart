@@ -5,14 +5,21 @@ import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
   @override
-  _SettingsScreenState createState() => _SettingsScreenState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _includeNoDueDate = true;
   List<String> _parentRequirementLevels = [];
-  final List<String> _allLevels = ['NONE', 'OPTIONAL', 'VOLUNTEER', 'MANDATORY'];
+  final List<String> _allLevels = [
+    'NONE',
+    'OPTIONAL',
+    'VOLUNTEER',
+    'MANDATORY'
+  ];
   String? _forwardAlias;
   String? _verificationLink;
   int? _verificationId;
@@ -33,7 +40,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (response != null) {
       _includeNoDueDate = response['include_no_due_date'] ?? true;
-      _parentRequirementLevels = List<String>.from(response['parent_requirement_levels'] ?? []);
+      _parentRequirementLevels =
+          List<String>.from(response['parent_requirement_levels'] ?? []);
     }
 
     final aliasRow = await Supabase.instance.client
@@ -46,8 +54,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (aliasRow != null) {
       _forwardAlias = aliasRow['alias'];
     } else {
-      final uuid = Uuid().v4().replaceAll('-', '').substring(0, 8);
-      final alias = 'u_'+uuid+'@in.emailinator.app';
+      final uuid = const Uuid().v4().replaceAll('-', '').substring(0, 8);
+      final alias = 'u_$uuid@in.emailinator.app';
       await Supabase.instance.client.from('email_aliases').insert({
         'user_id': userId,
         'alias': alias,
@@ -84,7 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Settings saved!')),
+          const SnackBar(content: Text('Settings saved!')),
         );
         Navigator.of(context).pop();
       }
@@ -104,8 +112,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (_verificationId != null) {
         await Supabase.instance.client
             .from('forwarding_verifications')
-            .update({'clicked_at': DateTime.now().toIso8601String()})
-            .eq('id', _verificationId ?? 0);
+            .update({'clicked_at': DateTime.now().toIso8601String()}).eq(
+                'id', _verificationId ?? 0);
       }
       if (mounted) {
         setState(() {
@@ -120,43 +128,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Settings'),
+        title: const Text('Settings'),
         actions: [
           IconButton(
-            icon: Icon(Icons.save),
+            icon: const Icon(Icons.save),
             onPressed: _saveSettings,
           ),
         ],
       ),
       body: ListView(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         children: [
           if (_verificationLink != null)
             Card(
               color: Colors.amber[100],
               child: ListTile(
-                title: Text('Click here to verify the forward address.'),
+                title: const Text('Click here to verify the forward address.'),
                 onTap: _launchVerification,
               ),
             ),
-          if (_verificationLink != null) SizedBox(height: 16),
+          if (_verificationLink != null) const SizedBox(height: 16),
           if (_forwardAlias != null)
             ListTile(
-              title: Text('Forward to this address'),
+              title: const Text('Forward to this address'),
               subtitle: Text(_forwardAlias!),
               trailing: IconButton(
-                icon: Icon(Icons.copy),
+                icon: const Icon(Icons.copy),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: _forwardAlias ?? ''));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Copied to clipboard')),
+                    const SnackBar(content: Text('Copied to clipboard')),
                   );
                 },
               ),
             ),
-          if (_forwardAlias != null) SizedBox(height: 16),
+          if (_forwardAlias != null) const SizedBox(height: 16),
           SwitchListTile(
-            title: Text('Include tasks with no due date'),
+            title: const Text('Include tasks with no due date'),
             value: _includeNoDueDate,
             onChanged: (bool value) {
               setState(() {
@@ -164,8 +172,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
-          SizedBox(height: 16),
-          Text('Parent Requirement Levels', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 16),
+          Text('Parent Requirement Levels',
+              style: Theme.of(context).textTheme.titleLarge),
           ..._allLevels.map((level) {
             return CheckboxListTile(
               title: Text(level),
@@ -180,7 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 });
               },
             );
-          }).toList(),
+          }),
         ],
       ),
     );

@@ -74,6 +74,10 @@ function createSupabaseStub(initialRaw: any[] = [], initialTasks: any[] = [], bu
                 builder._filters.push((r: any) => r[field] === value);
                 return builder;
               },
+              in(field: string, values: any[]) {
+                builder._filters.push((r: any) => values.includes(r[field]));
+                return builder;
+              },
               then(resolve: any) {
                 state.tasks = state.tasks.filter((t) => !builder._filters.every((f: any) => f(t)));
                 return resolve({ error: null });
@@ -135,7 +139,7 @@ test("processes UNPROCESSED raw emails", async () => {
     { id: 1, user_id: "user-1", text_body: "email", html_body: null, status: "UNPROCESSED" },
   ];
   const tasks = [
-    { user_id: "user-1", title: "Old", status: "PENDING" },
+    { id: 1, user_id: "user-1", title: "Old", status: "PENDING" },
   ];
   const supabase = createSupabaseStub(rawEmails, tasks);
   const fetchStub = createFetchStub([{ title: "New" }]);

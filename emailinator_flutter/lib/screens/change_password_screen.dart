@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/services.dart';
 import 'package:emailinator_flutter/widgets/submit_on_enter.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -56,9 +55,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password changed. Please sign in again.')),
+          const SnackBar(
+              content: Text('Password changed. Please sign in again.')),
         );
-        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/login', (route) => false);
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -95,16 +96,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Enter email' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Enter email' : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _currentPasswordController,
-                  decoration: const InputDecoration(labelText: 'Current Password'),
+                  decoration:
+                      const InputDecoration(labelText: 'Current Password'),
                   obscureText: true,
                   textInputAction: TextInputAction.next,
                   onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Enter current password' : null,
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Enter current password'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -122,13 +127,15 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _confirmNewPasswordController,
-                  decoration: const InputDecoration(labelText: 'Confirm New Password'),
+                  decoration:
+                      const InputDecoration(labelText: 'Confirm New Password'),
                   obscureText: true,
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _attemptSubmit(),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Confirm new password';
-                    if (v != _newPasswordController.text) return 'Passwords do not match';
+                    if (v != _newPasswordController.text)
+                      return 'Passwords do not match';
                     return null;
                   },
                 ),

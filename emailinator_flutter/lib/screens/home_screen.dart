@@ -3,18 +3,17 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:emailinator_flutter/models/app_state.dart';
-import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/widgets/task_list_item.dart';
 import 'package:emailinator_flutter/screens/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late Future<void> _tasksFuture;
-
   @override
   void initState() {
     super.initState();
@@ -25,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final week = today.add(const Duration(days: 7));
         appState.setDateRange(DateTimeRange(start: today, end: week));
       }
-      _tasksFuture = _loadTasks();
+      _loadTasks();
     });
   }
 
@@ -36,7 +35,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _signOut() async {
     await Supabase.instance.client.auth.signOut();
-    Navigator.of(context).pushReplacementNamed('/login');
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/login');
+    }
   }
 
   Future<void> _selectDateRange(BuildContext context) async {
@@ -63,19 +64,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Tasks'),
+        title: const Text('Tasks'),
         actions: [
           IconButton(
-            icon: Icon(Icons.settings),
+            icon: const Icon(Icons.settings),
             onPressed: () async {
               await Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => SettingsScreen()),
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
               );
               _loadTasks();
             },
           ),
           IconButton(
-            icon: Icon(Icons.logout),
+            icon: const Icon(Icons.logout),
             onPressed: _signOut,
           ),
         ],
@@ -87,14 +88,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Due:'),
-                SizedBox(width: 8),
+                const Text('Due:'),
+                const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => _selectDateRange(context),
                   child: Consumer<AppState>(
                     builder: (context, appState, child) {
                       if (appState.dateRange == null) {
-                        return Text('Select date range');
+                        return const Text('Select date range');
                       }
                       final start = appState.dateRange!.start;
                       final end = appState.dateRange!.end;
@@ -110,11 +111,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Consumer<AppState>(
               builder: (context, appState, child) {
                 if (appState.isLoading && appState.tasks.isEmpty) {
-                  return Center(child: CircularProgressIndicator());
+                  return const Center(child: CircularProgressIndicator());
                 }
 
                 if (appState.tasks.isEmpty) {
-                  return Center(child: Text('No tasks found.'));
+                  return const Center(child: Text('No tasks found.'));
                 }
 
                 return RefreshIndicator(

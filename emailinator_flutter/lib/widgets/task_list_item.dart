@@ -9,7 +9,7 @@ import 'package:emailinator_flutter/models/app_state.dart';
 class TaskListItem extends StatefulWidget {
   final Task task;
 
-  const TaskListItem({Key? key, required this.task}) : super(key: key);
+  const TaskListItem({super.key, required this.task});
 
   @override
   State<TaskListItem> createState() => _TaskListItemState();
@@ -25,8 +25,8 @@ class _TaskListItemState extends State<TaskListItem> {
     final appState = Provider.of<AppState>(context, listen: false);
     final task = widget.task;
     final originalStatus = task.status;
-  // Record original index so we can restore ordering on undo
-  final originalIndex = appState.tasks.indexWhere((t) => t.id == task.id);
+    // Record original index so we can restore ordering on undo
+    final originalIndex = appState.tasks.indexWhere((t) => t.id == task.id);
 
     // Optimistic remove
     appState.removeTask(task.id);
@@ -37,21 +37,19 @@ class _TaskListItemState extends State<TaskListItem> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          status == 'DONE'
-              ? 'Marked task as done'
-              : 'Dismissed task',
+          status == 'DONE' ? 'Marked task as done' : 'Dismissed task',
         ),
         action: SnackBarAction(
           label: 'UNDO',
           onPressed: () async {
             undoRequested = true;
             // Restore at original index (fallback to end if somehow not found)
-            appState.insertTaskAt(task, originalIndex == -1 ? appState.tasks.length : originalIndex);
+            appState.insertTaskAt(task,
+                originalIndex == -1 ? appState.tasks.length : originalIndex);
             try {
               await Supabase.instance.client
                   .from('tasks')
-                  .update({'status': originalStatus})
-                  .eq('id', task.id);
+                  .update({'status': originalStatus}).eq('id', task.id);
             } catch (e) {
               messenger.showSnackBar(
                 SnackBar(content: Text('Failed to undo: $e')),
@@ -64,14 +62,14 @@ class _TaskListItemState extends State<TaskListItem> {
     );
 
     try {
-    await Supabase.instance.client
-      .from('tasks')
-      .update({'status': status})
-      .eq('id', task.id);
+      await Supabase.instance.client
+          .from('tasks')
+          .update({'status': status}).eq('id', task.id);
     } catch (e) {
       // Rollback on failure
       if (!undoRequested) {
-  appState.insertTaskAt(task, originalIndex == -1 ? appState.tasks.length : originalIndex);
+        appState.insertTaskAt(
+            task, originalIndex == -1 ? appState.tasks.length : originalIndex);
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -91,14 +89,17 @@ class _TaskListItemState extends State<TaskListItem> {
         final lines = <Widget>[];
 
         Widget addSection(String label, String? value) {
-          if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
+          if (value == null || value.trim().isEmpty)
+            return const SizedBox.shrink();
           return Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: RichText(
               text: TextSpan(
                 style: Theme.of(ctx).textTheme.bodyMedium,
                 children: [
-                  TextSpan(text: '$label', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(
+                      text: label,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                   const TextSpan(text: ' '),
                   TextSpan(text: value),
                 ],
@@ -118,7 +119,7 @@ class _TaskListItemState extends State<TaskListItem> {
           addSection('Student action:', task.studentAction),
           addSection('Student requirement:', task.studentRequirementLevel),
           addSection('Consequence if ignored:', task.consequenceIfIgnore),
-          addSection('Due:', task.dueDate != null ? task.dueDate!.toIso8601String().substring(0, 10) : null),
+          addSection('Due:', task.dueDate?.toIso8601String().substring(0, 10)),
         ]);
 
         // Remove empty sized boxes
@@ -131,7 +132,7 @@ class _TaskListItemState extends State<TaskListItem> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: content.isEmpty
-                  ? [const Text('No additional details.')] 
+                  ? [const Text('No additional details.')]
                   : content,
             ),
           ),
@@ -155,46 +156,48 @@ class _TaskListItemState extends State<TaskListItem> {
         ignoring: _isProcessing,
         child: Slidable(
           key: ValueKey(task.id),
-            startActionPane: ActionPane(
-              motion: const DrawerMotion(),
-              dismissible: DismissiblePane(onDismissed: () => _updateTaskStatus('DISMISSED')),
-              children: [
-                SlidableAction(
-                  onPressed: (context) => _updateTaskStatus('DISMISSED'),
-                  backgroundColor: Colors.grey,
-                  foregroundColor: Colors.white,
-                  icon: Icons.do_not_disturb,
-                  label: 'Dismiss',
-                ),
-              ],
-            ),
-            endActionPane: ActionPane(
-              motion: const DrawerMotion(),
-              dismissible: DismissiblePane(onDismissed: () => _updateTaskStatus('DONE')),
-              children: [
-                SlidableAction(
-                  onPressed: (context) => _updateTaskStatus('DONE'),
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  icon: Icons.check_circle,
-                  label: 'Done',
-                ),
-              ],
-            ),
-            child: ListTile(
-              title: Text(task.title),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (task.dueDate != null)
-                    Text('Due: ${task.dueDate.toString().substring(0, 10)}'),
-                  if (task.parentRequirementLevel != null)
-                    Text('Parent requirement: ${task.parentRequirementLevel}'),
-                ],
+          startActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            dismissible: DismissiblePane(
+                onDismissed: () => _updateTaskStatus('DISMISSED')),
+            children: [
+              SlidableAction(
+                onPressed: (context) => _updateTaskStatus('DISMISSED'),
+                backgroundColor: Colors.grey,
+                foregroundColor: Colors.white,
+                icon: Icons.do_not_disturb,
+                label: 'Dismiss',
               ),
-              onTap: () => _showDetails(context),
-            ),
+            ],
           ),
+          endActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            dismissible:
+                DismissiblePane(onDismissed: () => _updateTaskStatus('DONE')),
+            children: [
+              SlidableAction(
+                onPressed: (context) => _updateTaskStatus('DONE'),
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                icon: Icons.check_circle,
+                label: 'Done',
+              ),
+            ],
+          ),
+          child: ListTile(
+            title: Text(task.title),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (task.dueDate != null)
+                  Text('Due: ${task.dueDate.toString().substring(0, 10)}'),
+                if (task.parentRequirementLevel != null)
+                  Text('Parent requirement: ${task.parentRequirementLevel}'),
+              ],
+            ),
+            onTap: () => _showDetails(context),
+          ),
+        ),
       ),
     );
   }

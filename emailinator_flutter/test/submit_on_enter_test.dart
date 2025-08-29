@@ -4,9 +4,11 @@ import 'package:emailinator_flutter/widgets/submit_on_enter.dart';
 import 'package:flutter/services.dart';
 
 void main() {
-  testWidgets('DebouncedSubmit prevents rapid double submit and allows later one', (tester) async {
+  testWidgets(
+      'DebouncedSubmit prevents rapid double submit and allows later one',
+      (tester) async {
     int count = 0;
-    DateTime current = DateTime(2024,1,1,12,0,0,0);
+    DateTime current = DateTime(2024, 1, 1, 12, 0, 0, 0);
     final debounced = DebouncedSubmit(
       debounce: const Duration(milliseconds: 500),
       now: () => current,

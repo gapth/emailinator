@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 /// Utility class to debounce submissions.
 class DebouncedSubmit {
-  DebouncedSubmit({this.debounce = const Duration(milliseconds: 800), DateTime Function()? now})
+  DebouncedSubmit(
+      {this.debounce = const Duration(milliseconds: 800),
+      DateTime Function()? now})
       : _now = now ?? DateTime.now;
   final Duration debounce;
   final DateTime Function() _now;

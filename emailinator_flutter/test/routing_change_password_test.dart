@@ -4,8 +4,11 @@ import 'package:emailinator_flutter/screens/change_password_screen.dart';
 import 'test_helpers.dart';
 
 void main() {
-  setUpAll(() async { await ensureSupabaseInitialized(); });
-  testWidgets('Initial route /change-password loads ChangePasswordScreen', (tester) async {
+  setUpAll(() async {
+    await ensureSupabaseInitialized();
+  });
+  testWidgets('Initial route /change-password loads ChangePasswordScreen',
+      (tester) async {
     await tester.pumpWidget(MaterialApp(
       initialRoute: '/change-password',
       routes: {

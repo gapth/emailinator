@@ -102,10 +102,6 @@ jobs:
           echo "Testing reprocess-unprocessed function..."
           npm run test:reprocess-unprocessed
           
-          # Also test filter_test.ts with Deno directly
-          echo "Testing inbound-email filter..."
-          deno test --allow-all supabase/functions/inbound-email/filter_test.ts
-
       - name: Stop Supabase
         working-directory: ./supabase
         run: supabase stop

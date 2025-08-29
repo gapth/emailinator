@@ -12,10 +12,13 @@ import 'package:emailinator_flutter/main.dart';
 import 'test_helpers.dart';
 
 void main() {
-  setUpAll(() async { await ensureSupabaseInitialized(); });
+  setUpAll(() async {
+    await ensureSupabaseInitialized();
+  });
 
-  testWidgets('Shows login screen when not authenticated', (WidgetTester tester) async {
-    await tester.pumpWidget(MyApp());
+  testWidgets('Shows login screen when not authenticated',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MyApp());
     await tester.pump();
     expect(find.widgetWithText(ElevatedButton, 'Sign In'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));

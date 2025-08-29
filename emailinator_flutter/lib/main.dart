@@ -23,12 +23,14 @@ Future<void> main() async {
   runApp(
     ChangeNotifierProvider(
       create: (context) => AppState(),
-      child: MyApp(),
+      child: const MyApp(),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -39,9 +41,9 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => AuthGate(),
-        '/login': (context) => LoginScreen(),
-        '/home': (context) => HomeScreen(),
+        '/': (context) => const AuthGate(),
+        '/login': (context) => const LoginScreen(),
+        '/home': (context) => const HomeScreen(),
         '/change-password': (context) => const ChangePasswordScreen(),
       },
     );
@@ -49,8 +51,10 @@ class MyApp extends StatelessWidget {
 }
 
 class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
   @override
-  _AuthGateState createState() => _AuthGateState();
+  State<AuthGate> createState() => _AuthGateState();
 }
 
 class _AuthGateState extends State<AuthGate> {
@@ -71,9 +75,9 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
-      return HomeScreen();
+      return const HomeScreen();
     } else {
-      return LoginScreen();
+      return const LoginScreen();
     }
   }
 }

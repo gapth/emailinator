@@ -28,7 +28,8 @@ class Task {
       id: json['id'],
       title: json['title'],
       description: json['description'],
-      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
+      dueDate:
+          json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
       consequenceIfIgnore: json['consequence_if_ignore'],
       parentAction: json['parent_action'],
       parentRequirementLevel: json['parent_requirement_level'],

@@ -14,7 +14,7 @@ import { test } from "node:test";
 // Supabase stub factory
 function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: boolean; budgetNanoUsd?: number } = {}) {
   const state = {
-    raw_emails: [],
+    raw_emails: [] as any[],
     tasks: [...initialTasks],
     budget: opts.budgetNanoUsd ?? 1_000_000_000,
     aliases: [{ alias: "u_1@in.emailinator.app", user_id: "user-1", active: true }],
@@ -85,6 +85,18 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
                 builder._filters.push((r: any) => r[field] === value);
                 return builder;
               },
+              or(condition: string) {
+                // Parse the OR condition for due_date filtering
+                if (condition.includes("due_date")) {
+                  const now = new Date().toISOString();
+                  builder._filters.push((r: any) => 
+                    r.due_date === null || 
+                    r.due_date === undefined || 
+                    r.due_date >= now.split('T')[0] // Compare just the date part
+                  );
+                }
+                return builder;
+              },
               then(resolve: any) {
                 const data = state.tasks.filter((t) => builder._filters.every((f: any) => f(t)));
                 return resolve({ data, error: null });
@@ -97,6 +109,10 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
               _filters: [] as ((r: any) => boolean)[],
               eq(field: string, value: any) {
                 builder._filters.push((r: any) => r[field] === value);
+                return builder;
+              },
+              in(field: string, values: any[]) {
+                builder._filters.push((r: any) => values.includes(r[field]));
                 return builder;
               },
               then(resolve: any) {
@@ -209,7 +225,7 @@ function makeReq(payload: any, opts: { auth?: boolean; ip?: string } = {}) {
   const headers: Record<string, string> = {};
   if (opts.auth !== false) {
     headers["authorization"] =
-      "Basic " + Buffer.from(`${BASIC_USER}:${BASIC_PASS}`).toString("base64");
+      "Basic " + btoa(`${BASIC_USER}:${BASIC_PASS}`);
   }
   headers["x-forwarded-for"] = opts.ip ?? ALLOWED_IP;
   return new Request("http://localhost", { method: "POST", headers, body });
@@ -289,7 +305,7 @@ test("skips processing when budget depleted", async () => {
 
 test("passes existing tasks and stores new set", async () => {
   const existing = [
-    { user_id: "user-1", title: "Old Task", status: "PENDING" },
+    { id: 1, user_id: "user-1", title: "Old Task", status: "PENDING" },
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([{ title: "New Task" }]);
@@ -320,7 +336,7 @@ test("keeps DB unchanged if extraction fails", async () => {
 
 test("rolls back tasks if inserting new tasks fails", async () => {
   const existing = [
-    { user_id: "user-1", title: "Old", status: "PENDING" },
+    { id: 1, user_id: "user-1", title: "Old", status: "PENDING" },
   ];
   const supabase = createSupabaseStub(existing, { failTaskInsert: true });
   const fetchStub = createFetchStub([{ title: "New" }]);
@@ -380,7 +396,7 @@ test("logs OpenAI response when task insert fails", async () => {
 
 test("handles zero tasks correctly", async () => {
   const existing = [
-    { user_id: "user-1", title: "Old", status: "PENDING" },
+    { id: 1, user_id: "user-1", title: "Old", status: "PENDING" },
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([]);
@@ -408,7 +424,7 @@ test("detects duplicate emails by Message-ID", async () => {
   assertEquals(res.status, 200);
 
   res = await handler(makeReq(payload));
-  assertEquals(res.status, 409);
+  assertEquals(res.status, 200); // Should return 200 (not 409) to prevent retries
   assertEquals(supabase.state.raw_emails.length, 1);
 });
 
@@ -434,8 +450,8 @@ test("dedupes emails without Message-ID using other fields", async () => {
 
 test("only pending tasks are deduped", async () => {
   const existing = [
-    { user_id: "user-1", title: "Pending", status: "PENDING" },
-    { user_id: "user-1", title: "Done", status: "DONE" },
+    { id: 1, user_id: "user-1", title: "Pending", status: "PENDING" },
+    { id: 2, user_id: "user-1", title: "Done", status: "DONE" },
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([{ title: "New" }]);

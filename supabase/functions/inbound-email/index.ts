@@ -2,14 +2,22 @@
 import { extractDeduplicatedTasks, replaceTasksAndUpdateEmail, chooseEmailText, INPUT_NANO_USD_PER_TOKEN, OUTPUT_NANO_USD_PER_TOKEN } from "../_shared/task-utils.ts";
 
 type InboundPayload = {
-  from_email?: string;
-  to_email?: string;
-  subject?: string;
-  text_body?: string;
-  html_body?: string;
-  date?: string;
-  message_id?: string;
-  provider_meta?: Record<string, any>;
+  // Postmark fields (PascalCase from webhook)
+  From?: string;
+  To?: string;
+  Cc?: string;
+  Bcc?: string;
+  Subject?: string;
+  TextBody?: string;
+  HtmlBody?: string;
+  Date?: string;
+  MessageID?: string;
+  ProviderMeta?: Record<string, any>;
+  
+  // Postmark full address arrays
+  ToFull?: Array<{ Email: string; Name: string; MailboxHash: string }>;
+  CcFull?: Array<{ Email: string; Name: string; MailboxHash: string }>;
+  BccFull?: Array<{ Email: string; Name: string; MailboxHash: string }>;
 };
 
 function extractForwardVerificationLink(payload: any): string | null {

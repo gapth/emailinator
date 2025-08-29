@@ -6,14 +6,21 @@ import 'test_helpers.dart';
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
 void main() {
-  setUpAll(() async { await ensureSupabaseInitialized(); });
+  setUpAll(() async {
+    await ensureSupabaseInitialized();
+  });
   testWidgets('ChangePasswordScreen shows mismatch error', (tester) async {
     await tester.pumpWidget(_wrap(const ChangePasswordScreen()));
 
-    await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'user@example.com');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Current Password'), 'oldpass123');
-    await tester.enterText(find.widgetWithText(TextFormField, 'New Password'), 'newpass123');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Confirm New Password'), 'different');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'), 'user@example.com');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Current Password'), 'oldpass123');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'New Password'), 'newpass123');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Confirm New Password'),
+        'different');
 
     await tester.tap(find.text('Update Password'));
     await tester.pump();

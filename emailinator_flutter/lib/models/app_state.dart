@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/task.dart';
@@ -33,7 +32,8 @@ class AppState extends ChangeNotifier {
           .maybeSingle();
 
       if (prefs != null) {
-        _parentRequirementLevels = List<String>.from(prefs['parent_requirement_levels'] ?? []);
+        _parentRequirementLevels =
+            List<String>.from(prefs['parent_requirement_levels'] ?? []);
         _includeNoDueDate = prefs['include_no_due_date'] ?? true;
       }
 
@@ -43,7 +43,8 @@ class AppState extends ChangeNotifier {
           .eq('status', 'PENDING');
 
       if (_parentRequirementLevels.isNotEmpty) {
-        query = query.inFilter('parent_requirement_level', _parentRequirementLevels);
+        query = query.inFilter(
+            'parent_requirement_level', _parentRequirementLevels);
       }
 
       if (_dateRange != null) {
@@ -62,16 +63,15 @@ class AppState extends ChangeNotifier {
       final response = await query.order('due_date', ascending: true);
 
       _tasks = (response as List).map((item) => Task.fromJson(item)).toList();
-
     } catch (e) {
-      // Handle error
-      print(e);
+      // Handle error - could use logging package or debugPrint in development
+      debugPrint('Error fetching tasks: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
-  
+
   void removeTask(String taskId) {
     _tasks.removeWhere((task) => task.id == taskId);
     notifyListeners();
@@ -89,7 +89,8 @@ class AppState extends ChangeNotifier {
   /// If the index is out of range it will be clamped to the valid bounds.
   /// Will not insert if a task with the same id already exists.
   void insertTaskAt(Task task, int index) {
-    if (_tasks.indexWhere((t) => t.id == task.id) != -1) return; // already present
+    if (_tasks.indexWhere((t) => t.id == task.id) != -1)
+      return; // already present
     if (index < 0) index = 0;
     if (index > _tasks.length) index = _tasks.length;
     _tasks.insert(index, task);
