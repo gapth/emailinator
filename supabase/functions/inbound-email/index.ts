@@ -2,7 +2,6 @@
 import { extractDeduplicatedTasks, replaceTasksAndUpdateEmail, chooseEmailText, INPUT_NANO_USD_PER_TOKEN, OUTPUT_NANO_USD_PER_TOKEN } from "../_shared/task-utils.ts";
 
 type InboundPayload = {
-  // Postmark fields (PascalCase from webhook)
   From?: string;
   To?: string;
   Cc?: string;
