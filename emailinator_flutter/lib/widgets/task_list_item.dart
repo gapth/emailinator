@@ -18,13 +18,13 @@ class TaskListItem extends StatefulWidget {
 class _TaskListItemState extends State<TaskListItem> {
   bool _isProcessing = false;
 
-  Future<void> _updateTaskStatus(String status) async {
+  Future<void> _updateTaskStatus(String newState) async {
     if (_isProcessing) return; // guard against double triggers
     setState(() => _isProcessing = true);
 
     final appState = Provider.of<AppState>(context, listen: false);
     final task = widget.task;
-    final originalStatus = task.status;
+    final originalState = task.state;
     // Record original index so we can restore ordering on undo
     final originalIndex = appState.tasks.indexWhere((t) => t.id == task.id);
 
@@ -37,7 +37,7 @@ class _TaskListItemState extends State<TaskListItem> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          status == 'DONE' ? 'Marked task as done' : 'Dismissed task',
+          newState == 'COMPLETED' ? 'Marked task as done' : 'Dismissed task',
         ),
         action: SnackBarAction(
           label: 'UNDO',
@@ -47,9 +47,11 @@ class _TaskListItemState extends State<TaskListItem> {
             appState.insertTaskAt(task,
                 originalIndex == -1 ? appState.tasks.length : originalIndex);
             try {
-              await Supabase.instance.client
-                  .from('tasks')
-                  .update({'status': originalStatus}).eq('id', task.id);
+              await Supabase.instance.client.from('user_task_states').upsert({
+                'user_id': task.userId,
+                'task_id': task.id,
+                'state': originalState,
+              }, onConflict: 'user_id, task_id');
             } catch (e) {
               messenger.showSnackBar(
                 SnackBar(content: Text('Failed to undo: $e')),
@@ -62,9 +64,15 @@ class _TaskListItemState extends State<TaskListItem> {
     );
 
     try {
-      await Supabase.instance.client
-          .from('tasks')
-          .update({'status': status}).eq('id', task.id);
+      await Supabase.instance.client.from('user_task_states').upsert({
+        'user_id': task.userId,
+        'task_id': task.id,
+        'state': newState,
+        'completed_at':
+            newState == 'COMPLETED' ? DateTime.now().toIso8601String() : null,
+        'dismissed_at':
+            newState == 'DISMISSED' ? DateTime.now().toIso8601String() : null,
+      }, onConflict: 'user_id, task_id');
     } catch (e) {
       // Rollback on failure
       if (!undoRequested) {
@@ -173,11 +181,11 @@ class _TaskListItemState extends State<TaskListItem> {
           ),
           endActionPane: ActionPane(
             motion: const DrawerMotion(),
-            dismissible:
-                DismissiblePane(onDismissed: () => _updateTaskStatus('DONE')),
+            dismissible: DismissiblePane(
+                onDismissed: () => _updateTaskStatus('COMPLETED')),
             children: [
               SlidableAction(
-                onPressed: (context) => _updateTaskStatus('DONE'),
+                onPressed: (context) => _updateTaskStatus('COMPLETED'),
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 icon: Icons.check_circle,

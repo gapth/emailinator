@@ -10,7 +10,7 @@ function createSupabaseStub(initial = 0) {
   return {
     state,
     from(table: string) {
-      if (table !== "openai_budget") throw new Error("unknown table");
+      if (table !== "processing_budgets") throw new Error("unknown table");
       return {
         select() {
           const builder: any = {

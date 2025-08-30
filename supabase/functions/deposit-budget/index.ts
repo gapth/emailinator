@@ -15,7 +15,7 @@ export function createHandler({ supabase, depositNanoUsd, serviceRoleKey }: Deps
     if (!user_id) return new Response("user_id required", { status: 400 });
 
     const { data: existing, error } = await supabase
-      .from("openai_budget")
+      .from("processing_budgets")
       .select("remaining_nano_usd")
       .eq("user_id", user_id)
       .single();
@@ -24,7 +24,7 @@ export function createHandler({ supabase, depositNanoUsd, serviceRoleKey }: Deps
     const newBalance = current + depositNanoUsd;
 
     const { error: upsertError } = await supabase
-      .from("openai_budget")
+      .from("processing_budgets")
       .upsert({ user_id, remaining_nano_usd: newBalance });
     if (upsertError) return new Response(upsertError.message, { status: 500 });
 

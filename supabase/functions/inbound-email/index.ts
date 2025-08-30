@@ -190,7 +190,7 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
         student_requirement_level: t.student_requirement_level ?? null,
       }));
       const { data: budgetRow, error: budgetError } = await supabase
-        .from("openai_budget")
+        .from("processing_budgets")
         .select("remaining_nano_usd")
         .eq("user_id", user_id)
         .single();
@@ -274,7 +274,7 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
 
       const totalCost = inputCostNano + outputCostNano;
       await supabase
-        .from("openai_budget")
+        .from("processing_budgets")
         .upsert({ user_id, remaining_nano_usd: remainingBudget - totalCost });
 
       return new Response(JSON.stringify({ task_count: applyResult.taskCount }), {

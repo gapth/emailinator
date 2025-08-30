@@ -1,5 +1,7 @@
 class Task {
   final String id;
+  final String userId;
+  final String? emailId;
   final String title;
   final String? description;
   final DateTime? dueDate;
@@ -8,10 +10,17 @@ class Task {
   final String? parentRequirementLevel;
   final String? studentAction;
   final String? studentRequirementLevel;
-  final String status;
+  final String? state;
+  final DateTime? completedAt;
+  final DateTime? dismissedAt;
+  final DateTime? snoozedUntil;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
-  Task({
+  const Task({
     required this.id,
+    required this.userId,
+    this.emailId,
     required this.title,
     this.description,
     this.dueDate,
@@ -20,12 +29,19 @@ class Task {
     this.parentRequirementLevel,
     this.studentAction,
     this.studentRequirementLevel,
-    required this.status,
+    this.state,
+    this.completedAt,
+    this.dismissedAt,
+    this.snoozedUntil,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(
       id: json['id'],
+      userId: json['user_id'],
+      emailId: json['email_id'],
       title: json['title'],
       description: json['description'],
       dueDate:
@@ -35,7 +51,18 @@ class Task {
       parentRequirementLevel: json['parent_requirement_level'],
       studentAction: json['student_action'],
       studentRequirementLevel: json['student_requirement_level'],
-      status: json['status'],
+      state: json['state'],
+      completedAt: json['completed_at'] != null
+          ? DateTime.parse(json['completed_at'])
+          : null,
+      dismissedAt: json['dismissed_at'] != null
+          ? DateTime.parse(json['dismissed_at'])
+          : null,
+      snoozedUntil: json['snoozed_until'] != null
+          ? DateTime.parse(json['snoozed_until'])
+          : null,
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
     );
   }
 }

@@ -132,7 +132,7 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
           },
         };
       }
-      if (table === "openai_budget") {
+      if (table === "processing_budgets") {
         return {
           select() {
             const builder: any = {

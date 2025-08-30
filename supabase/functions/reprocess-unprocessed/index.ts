@@ -33,7 +33,7 @@ export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }:
         const emailText = chooseEmailText(raw);
 
         const { data: budgetRow, error: budgetError } = await supabase
-          .from("openai_budget")
+          .from("processing_budgets")
           .select("remaining_nano_usd")
           .eq("user_id", user_id)
           .single();
@@ -85,7 +85,7 @@ export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }:
             promptTokens * INPUT_NANO_USD_PER_TOKEN +
             completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
           await supabase
-            .from("openai_budget")
+            .from("processing_budgets")
             .upsert({ user_id, remaining_nano_usd: remainingBudget - totalCost });
         }
       } catch (e) {

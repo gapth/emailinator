@@ -38,9 +38,9 @@ class AppState extends ChangeNotifier {
       }
 
       var query = Supabase.instance.client
-          .from('tasks')
+          .from('user_tasks')
           .select()
-          .eq('status', 'PENDING');
+          .eq('state', 'OPEN');
 
       if (_parentRequirementLevels.isNotEmpty) {
         query = query.inFilter(
