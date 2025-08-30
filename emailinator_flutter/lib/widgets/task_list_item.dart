@@ -51,6 +51,8 @@ class _TaskListItemState extends State<TaskListItem> {
                 'user_id': task.userId,
                 'task_id': task.id,
                 'state': originalState,
+                'completed_at': null,
+                'dismissed_at': null,
               }, onConflict: 'user_id, task_id');
             } catch (e) {
               messenger.showSnackBar(
