@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/widgets/task_list_item.dart';
+import 'package:emailinator_flutter/widgets/filter_bar.dart';
 import 'package:emailinator_flutter/screens/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -42,26 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _selectDateRange(BuildContext context) async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final initialDateRange = appState.dateRange ??
-        DateTimeRange(
-          start: DateTime.now().subtract(const Duration(days: 7)),
-          end: DateTime.now().add(const Duration(days: 30)),
-        );
-    final newDateRange = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(DateTime.now().year - 5),
-      lastDate: DateTime(DateTime.now().year + 5),
-      initialDateRange: initialDateRange,
-    );
-
-    if (newDateRange != null) {
-      appState.setDateRange(newDateRange);
-      _loadTasks();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,30 +66,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('Due:'),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () => _selectDateRange(context),
-                  child: Consumer<AppState>(
-                    builder: (context, appState, child) {
-                      if (appState.dateRange == null) {
-                        return const Text('Select date range');
-                      }
-                      final start = appState.dateRange!.start;
-                      final end = appState.dateRange!.end;
-                      return Text(
-                          '${start.toLocal().toString().split(' ')[0]} - ${end.toLocal().toString().split(' ')[0]}');
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // Filter chips showing current state
+          FilterBar(onFiltersChanged: _loadTasks),
           Expanded(
             child: Consumer<AppState>(
               builder: (context, appState, child) {

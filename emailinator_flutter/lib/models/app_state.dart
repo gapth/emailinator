@@ -12,6 +12,8 @@ class AppState extends ChangeNotifier {
   List<Task> get tasks => _tasks;
   bool get isLoading => _isLoading;
   DateTimeRange? get dateRange => _dateRange;
+  List<String> getParentRequirementLevels() =>
+      List<String>.from(_parentRequirementLevels);
 
   void setDateRange(DateTimeRange? newDateRange) {
     _dateRange = newDateRange;
