@@ -164,13 +164,13 @@ export function createHandler({ supabase, fetch, openAiApiKey, basicUser, basicP
       const emailText = chooseEmailText(payload);
       console.info(`[inbound-email] user=${user_id} email_text_length=${emailText.length}`);
 
-      // Only get pending tasks that are future or have no due date
+      // Only get open tasks that are future or have no due date
       const now = new Date().toISOString();
       const { data: existingRaw, error: existingError } = await supabase
-        .from("tasks")
+        .from("user_tasks")
         .select("*")
         .eq("user_id", user_id)
-        .eq("status", "PENDING")
+        .eq("state", "OPEN")
         .or(`due_date.is.null,due_date.gte.${now}`);
 
       if (existingError) return new Response(existingError.message, { status: 500 });

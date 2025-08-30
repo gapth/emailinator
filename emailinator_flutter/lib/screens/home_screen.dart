@@ -21,8 +21,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final appState = Provider.of<AppState>(context, listen: false);
       if (appState.dateRange == null) {
         final today = DateTime.now();
-        final week = today.add(const Duration(days: 7));
-        appState.setDateRange(DateTimeRange(start: today, end: week));
+        final pastWeek = today.subtract(const Duration(days: 7));
+        final futureMonth = today.add(const Duration(days: 30));
+        appState.setDateRange(DateTimeRange(start: pastWeek, end: futureMonth));
       }
       _loadTasks();
     });
@@ -44,8 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final appState = Provider.of<AppState>(context, listen: false);
     final initialDateRange = appState.dateRange ??
         DateTimeRange(
-          start: DateTime.now(),
-          end: DateTime.now().add(const Duration(days: 7)),
+          start: DateTime.now().subtract(const Duration(days: 7)),
+          end: DateTime.now().add(const Duration(days: 30)),
         );
     final newDateRange = await showDateRangePicker(
       context: context,

@@ -76,7 +76,7 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
           },
         };
       }
-      if (table === "tasks") {
+      if (table === "user_tasks") {
         return {
           select() {
             const builder: any = {
@@ -104,6 +104,10 @@ function createSupabaseStub(initialTasks: any[] = [], opts: { failTaskInsert?: b
             };
             return builder;
           },
+        };
+      }
+      if (table === "tasks") {
+        return {
           delete() {
             const builder: any = {
               _filters: [] as ((r: any) => boolean)[],
@@ -305,7 +309,7 @@ test("skips processing when budget depleted", async () => {
 
 test("passes existing tasks and stores new set", async () => {
   const existing = [
-    { id: 1, user_id: "user-1", title: "Old Task", status: "PENDING" },
+    { id: 1, user_id: "user-1", title: "Old Task", state: "OPEN" },
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([{ title: "New Task" }]);
@@ -322,7 +326,7 @@ test("passes existing tasks and stores new set", async () => {
 
 test("keeps DB unchanged if extraction fails", async () => {
   const existing = [
-    { user_id: "user-1", title: "Keep", status: "PENDING" },
+    { user_id: "user-1", title: "Keep", state: "OPEN" },
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([], { fail: true });
@@ -336,7 +340,7 @@ test("keeps DB unchanged if extraction fails", async () => {
 
 test("rolls back tasks if inserting new tasks fails", async () => {
   const existing = [
-    { id: 1, user_id: "user-1", title: "Old", status: "PENDING" },
+    { id: 1, user_id: "user-1", title: "Old", state: "OPEN" },
   ];
   const supabase = createSupabaseStub(existing, { failTaskInsert: true });
   const fetchStub = createFetchStub([{ title: "New" }]);
@@ -375,7 +379,7 @@ test("sanitizes invalid task fields", async () => {
 
 test("logs OpenAI response when task insert fails", async () => {
   const existing = [
-    { user_id: "user-1", title: "Old", status: "PENDING" },
+    { user_id: "user-1", title: "Old", state: "OPEN" },
   ];
   const supabase = createSupabaseStub(existing, { failTaskInsert: true });
   const fetchStub = createFetchStub([{ title: "New" }]);
@@ -396,7 +400,7 @@ test("logs OpenAI response when task insert fails", async () => {
 
 test("handles zero tasks correctly", async () => {
   const existing = [
-    { id: 1, user_id: "user-1", title: "Old", status: "PENDING" },
+    { id: 1, user_id: "user-1", title: "Old", state: "OPEN" },
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([]);
@@ -448,10 +452,10 @@ test("dedupes emails without Message-ID using other fields", async () => {
   assertEquals(supabase.state.raw_emails.length, 1);
 });
 
-test("only pending tasks are deduped", async () => {
+test("only open tasks are deduped", async () => {
   const existing = [
-    { id: 1, user_id: "user-1", title: "Pending", status: "PENDING" },
-    { id: 2, user_id: "user-1", title: "Done", status: "DONE" },
+    { id: 1, user_id: "user-1", title: "Open", state: "OPEN" },
+    { id: 2, user_id: "user-1", title: "Completed", state: "COMPLETED" },
   ];
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([{ title: "New" }]);
@@ -460,15 +464,15 @@ test("only pending tasks are deduped", async () => {
   const res = await handler(makeReq({ TextBody: "email" }));
   assertEquals(res.status, 200);
   const body = fetchStub.calls[0].init.body;
-  assert(body.includes("Pending"));
-  assert(!body.includes("Done"));
+  assert(body.includes("Open"));
+  assert(!body.includes("Completed"));
   const titles = supabase.state.tasks.map((t) => t.title).sort();
-  assert(titles.includes("Done"));
+  assert(titles.includes("Completed"));
   assert(titles.includes("New"));
-  assert(!titles.includes("Pending"));
+  assert(!titles.includes("Open"));
 });
 
-test("only future or no-due-date pending tasks are fetched for deduplication", async () => {
+test("only future or no-due-date open tasks are fetched for deduplication", async () => {
   // Mock the current time
   const mockNow = '2025-01-01T12:00:00.000Z';
   const originalToISOString = Date.prototype.toISOString;
@@ -477,10 +481,10 @@ test("only future or no-due-date pending tasks are fetched for deduplication", a
   };
   
   const existing = [
-    { id: 1, user_id: "user-1", title: "Past task", status: "PENDING", due_date: '2024-12-31' },
-    { id: 2, user_id: "user-1", title: "Future task", status: "PENDING", due_date: '2025-01-02' },
-    { id: 3, user_id: "user-1", title: "No due date", status: "PENDING", due_date: null },
-    { id: 4, user_id: "user-1", title: "Completed past", status: "COMPLETED", due_date: '2024-12-31' },
+    { id: 1, user_id: "user-1", title: "Past task", state: "OPEN", due_date: '2024-12-31' },
+    { id: 2, user_id: "user-1", title: "Future task", state: "OPEN", due_date: '2025-01-02' },
+    { id: 3, user_id: "user-1", title: "No due date", state: "OPEN", due_date: null },
+    { id: 4, user_id: "user-1", title: "Completed past", state: "COMPLETED", due_date: '2024-12-31' },
   ];
   
   const supabase = createSupabaseStub(existing);
@@ -491,7 +495,7 @@ test("only future or no-due-date pending tasks are fetched for deduplication", a
   const originalFrom = supabase.from;
   supabase.from = function(table: string) {
     const result = originalFrom.call(this, table);
-    if (table === "tasks" && result.select) {
+    if (table === "user_tasks" && result.select) {
       const originalSelect = result.select;
       result.select = function(fields: string) {
         const selectResult = originalSelect.call(this, fields);
@@ -501,7 +505,7 @@ test("only future or no-due-date pending tasks are fetched for deduplication", a
           selectResult.or = function(condition: string) {
             // Simulate the database filtering: only return tasks that match our criteria
             const filtered = existing.filter(task => 
-              task.status === "PENDING" && 
+              task.state === "OPEN" && 
               (task.due_date === null || task.due_date >= mockNow.split('T')[0])
             );
             queriedTasks.push(...filtered);

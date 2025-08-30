@@ -41,10 +41,10 @@ export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }:
         if (remainingBudget <= 0) continue;
 
         const { data: existingRaw, error: existingError } = await supabase
-          .from("tasks")
+          .from("user_tasks")
           .select("*")
           .eq("user_id", user_id)
-          .eq("status", "PENDING");
+          .eq("state", "OPEN");
         if (existingError) continue;
 
         const existingRows = Array.isArray(existingRaw) ? existingRaw : [];

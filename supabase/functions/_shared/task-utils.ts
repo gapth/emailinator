@@ -272,7 +272,6 @@ export async function replaceTasksAndUpdateEmail(
       parent_requirement_level: t.parent_requirement_level ?? null,
       student_action: t.student_action ?? null,
       student_requirement_level: t.student_requirement_level ?? null,
-      status: "PENDING",
     }));
 
     const { error: insertError } = await supabase
