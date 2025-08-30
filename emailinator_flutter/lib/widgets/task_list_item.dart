@@ -128,7 +128,10 @@ class _TaskListItemState extends State<TaskListItem> {
           addSection('Student action:', task.studentAction),
           addSection('Student requirement:', task.studentRequirementLevel),
           addSection('Consequence if ignored:', task.consequenceIfIgnore),
-          addSection('Due:', task.dueDate?.toIso8601String().substring(0, 10)),
+          addSection(
+              task.dueDate != null ? 'Due:' : 'Due?:',
+              task.dueDate?.toIso8601String().substring(0, 10) ??
+                  task.createdAt.toIso8601String().substring(0, 10)),
         ]);
 
         // Remove empty sized boxes
@@ -199,7 +202,9 @@ class _TaskListItemState extends State<TaskListItem> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (task.dueDate != null)
-                  Text('Due: ${task.dueDate.toString().substring(0, 10)}'),
+                  Text('Due: ${task.dueDate.toString().substring(0, 10)}')
+                else
+                  Text('Due?: ${task.createdAt.toString().substring(0, 10)}'),
                 if (task.parentRequirementLevel != null)
                   Text('Parent requirement: ${task.parentRequirementLevel}'),
               ],

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:emailinator_flutter/models/app_state.dart';
+import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/widgets/task_list_item.dart';
 import 'package:emailinator_flutter/screens/settings_screen.dart';
 
@@ -119,14 +120,78 @@ class _HomeScreenState extends State<HomeScreen> {
                   return const Center(child: Text('No tasks found.'));
                 }
 
+                // Separate tasks into overdue and upcoming
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+
+                final overdueTasks = <Task>[];
+                final upcomingTasks = <Task>[];
+
+                for (final task in appState.tasks) {
+                  final taskDate = task.dueDate ?? task.createdAt;
+                  final taskDay =
+                      DateTime(taskDate.year, taskDate.month, taskDate.day);
+
+                  if (taskDay.isBefore(today)) {
+                    overdueTasks.add(task);
+                  } else {
+                    upcomingTasks.add(task);
+                  }
+                }
+
+                // Sort each section by effective date (due date or created date)
+                overdueTasks.sort((a, b) {
+                  final aDate = a.dueDate ?? a.createdAt;
+                  final bDate = b.dueDate ?? b.createdAt;
+                  return aDate.compareTo(bDate);
+                });
+
+                upcomingTasks.sort((a, b) {
+                  final aDate = a.dueDate ?? a.createdAt;
+                  final bDate = b.dueDate ?? b.createdAt;
+                  return aDate.compareTo(bDate);
+                });
+
                 return RefreshIndicator(
                   onRefresh: _loadTasks,
-                  child: ListView.builder(
-                    itemCount: appState.tasks.length,
-                    itemBuilder: (context, index) {
-                      final task = appState.tasks[index];
-                      return TaskListItem(task: task);
-                    },
+                  child: ListView(
+                    children: [
+                      // Overdue section
+                      if (overdueTasks.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'Overdue',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  color: Colors.red.shade700,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ),
+                        ...overdueTasks.map((task) => TaskListItem(task: task)),
+                      ],
+
+                      // Upcoming section
+                      if (upcomingTasks.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'Upcoming',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ),
+                        ...upcomingTasks
+                            .map((task) => TaskListItem(task: task)),
+                      ],
+                    ],
                   ),
                 );
               },
