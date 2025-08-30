@@ -12,6 +12,10 @@ Emailinator helps parents manage school emails—and eventually other communicat
 - **Flutter** powers the web, Android, and iOS apps.
 - **Cloudflare** hosts the web experience.
 
+## Flutter App
+
+For detailed information about running and developing the Flutter application, see the [Flutter README](emailinator_flutter/README.md).
+
 ## Development
 
 ### Python tests
