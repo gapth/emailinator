@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 
 import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
@@ -18,7 +19,8 @@ class TaskListItem extends StatefulWidget {
 class _TaskListItemState extends State<TaskListItem> {
   bool _isProcessing = false;
 
-  Future<void> _updateTaskStatus(String newState) async {
+  Future<void> _updateTaskStatus(String newState,
+      {DateTime? snoozedUntil}) async {
     if (_isProcessing) return; // guard against double triggers
     setState(() => _isProcessing = true);
 
@@ -37,7 +39,11 @@ class _TaskListItemState extends State<TaskListItem> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          newState == 'COMPLETED' ? 'Marked task as done' : 'Dismissed task',
+          newState == 'COMPLETED'
+              ? 'Marked task as done'
+              : newState == 'DISMISSED'
+                  ? 'Dismissed task'
+                  : 'Snoozed task',
         ),
         action: SnackBarAction(
           label: 'UNDO',
@@ -53,6 +59,7 @@ class _TaskListItemState extends State<TaskListItem> {
                 'state': originalState,
                 'completed_at': null,
                 'dismissed_at': null,
+                'snoozed_until': null,
               }, onConflict: 'user_id, task_id');
             } catch (e) {
               messenger.showSnackBar(
@@ -66,7 +73,7 @@ class _TaskListItemState extends State<TaskListItem> {
     );
 
     try {
-      await Supabase.instance.client.from('user_task_states').upsert({
+      final updateData = <String, dynamic>{
         'user_id': task.userId,
         'task_id': task.id,
         'state': newState,
@@ -74,7 +81,12 @@ class _TaskListItemState extends State<TaskListItem> {
             newState == 'COMPLETED' ? DateTime.now().toIso8601String() : null,
         'dismissed_at':
             newState == 'DISMISSED' ? DateTime.now().toIso8601String() : null,
-      }, onConflict: 'user_id, task_id');
+        'snoozed_until': snoozedUntil?.toIso8601String(),
+      };
+
+      await Supabase.instance.client
+          .from('user_task_states')
+          .upsert(updateData, onConflict: 'user_id, task_id');
     } catch (e) {
       // Rollback on failure
       if (!undoRequested) {
@@ -89,6 +101,112 @@ class _TaskListItemState extends State<TaskListItem> {
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
+  }
+
+  Future<void> _snoozeTask() async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Snooze until',
+    );
+
+    if (selectedDate != null) {
+      await _updateTaskStatus('SNOOZED', snoozedUntil: selectedDate);
+    }
+  }
+
+  Future<void> _reopenTask() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    final task = widget.task;
+
+    try {
+      await Supabase.instance.client.from('user_task_states').upsert({
+        'user_id': task.userId,
+        'task_id': task.id,
+        'state': 'OPEN',
+        'completed_at': null,
+        'dismissed_at': null,
+        'snoozed_until': null,
+      }, onConflict: 'user_id, task_id');
+
+      // Refresh tasks to show the reopened task
+      await appState.fetchTasks();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task reopened')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reopen task: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
+    return DateFormat('MMM d, y').format(date);
+  }
+
+  Widget _buildStatusInfo() {
+    final task = widget.task;
+    if (task.state == 'COMPLETED' && task.completedAt != null) {
+      return Row(
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            'Completed on ${_formatDate(task.completedAt)}',
+            style: const TextStyle(
+              color: Colors.green,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    } else if (task.state == 'DISMISSED' && task.dismissedAt != null) {
+      return Row(
+        children: [
+          const Icon(Icons.cancel, color: Colors.grey, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            'Dismissed on ${_formatDate(task.dismissedAt)}',
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    } else if (task.state == 'SNOOZED' && task.snoozedUntil != null) {
+      return Row(
+        children: [
+          const Icon(Icons.snooze, color: Colors.orange, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            'Snoozed until ${_formatDate(task.snoozedUntil)}',
+            style: const TextStyle(
+              color: Colors.orange,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   void _showDetails(BuildContext context) {
@@ -134,6 +252,11 @@ class _TaskListItemState extends State<TaskListItem> {
               task.dueDate != null ? 'Due:' : 'Due?:',
               task.dueDate?.toIso8601String().substring(0, 10) ??
                   task.createdAt.toIso8601String().substring(0, 10)),
+          // Add status info if task is completed/dismissed/snoozed
+          if (task.state != null && task.state != 'OPEN') ...[
+            const SizedBox(height: 8),
+            _buildStatusInfo(),
+          ],
         ]);
 
         // Remove empty sized boxes
@@ -151,6 +274,44 @@ class _TaskListItemState extends State<TaskListItem> {
             ),
           ),
           actions: [
+            // Show different actions based on task state
+            if (task.state == null || task.state == 'OPEN') ...[
+              // Primary action buttons for open tasks
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _updateTaskStatus('DISMISSED');
+                },
+                icon: const Icon(Icons.do_not_disturb),
+                label: const Text('Dismiss'),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _snoozeTask();
+                },
+                icon: const Icon(Icons.snooze),
+                label: const Text('Snooze'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _updateTaskStatus('COMPLETED');
+                },
+                icon: const Icon(Icons.check_circle),
+                label: const Text('Complete'),
+              ),
+            ] else ...[
+              // Reopen action for completed/dismissed/snoozed tasks
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _reopenTask();
+                },
+                icon: const Icon(Icons.undo),
+                label: const Text('Reopen'),
+              ),
+            ],
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('Close'),

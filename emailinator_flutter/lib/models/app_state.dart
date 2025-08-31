@@ -50,10 +50,8 @@ class AppState extends ChangeNotifier {
         _showHistory = prefs['show_history'] ?? false;
       }
 
-      var query = Supabase.instance.client
-          .from('user_tasks')
-          .select()
-          .eq('state', 'OPEN');
+      var query = Supabase.instance.client.from('user_tasks').select().or(
+          'state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateTime.now().toIso8601String()})');
 
       if (_parentRequirementLevels.isNotEmpty) {
         query = query.inFilter(
@@ -94,10 +92,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> _fetchHistoryTasks() async {
     try {
-      var historyQuery = Supabase.instance.client
-          .from('user_tasks')
-          .select()
-          .inFilter('state', ['COMPLETED', 'DISMISSED']);
+      var historyQuery = Supabase.instance.client.from('user_tasks').select().or(
+          'state.eq.COMPLETED,state.eq.DISMISSED,and(state.eq.SNOOZED,snoozed_until.gt.${DateTime.now().toIso8601String()})');
 
       if (_parentRequirementLevels.isNotEmpty) {
         historyQuery = historyQuery.inFilter(

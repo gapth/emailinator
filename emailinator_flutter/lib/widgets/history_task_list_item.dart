@@ -1,18 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:emailinator_flutter/models/task.dart';
+import 'package:emailinator_flutter/models/app_state.dart';
 
-class HistoryTaskListItem extends StatelessWidget {
+class HistoryTaskListItem extends StatefulWidget {
   final Task task;
 
   const HistoryTaskListItem({super.key, required this.task});
+
+  @override
+  State<HistoryTaskListItem> createState() => _HistoryTaskListItemState();
+}
+
+class _HistoryTaskListItemState extends State<HistoryTaskListItem> {
+  bool _isProcessing = false;
+
+  Future<void> _reopenTask() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    final task = widget.task;
+
+    try {
+      await Supabase.instance.client.from('user_task_states').upsert({
+        'user_id': task.userId,
+        'task_id': task.id,
+        'state': 'OPEN',
+        'completed_at': null,
+        'dismissed_at': null,
+        'snoozed_until': null,
+      }, onConflict: 'user_id, task_id');
+
+      // Refresh tasks to show the reopened task
+      await appState.fetchTasks();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task reopened')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reopen task: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
 
   void _showDetails(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) {
-        final task = this.task;
+        final task = widget.task;
         final lines = <Widget>[];
 
         Widget addSection(String label, String? value) {
@@ -51,6 +97,9 @@ class HistoryTaskListItem extends StatelessWidget {
               task.dueDate != null ? 'Due:' : 'Due?:',
               task.dueDate?.toIso8601String().substring(0, 10) ??
                   task.createdAt.toIso8601String().substring(0, 10)),
+          // Add status info
+          const SizedBox(height: 8),
+          _buildStatusInfo(),
         ]);
 
         // Remove empty sized boxes
@@ -68,6 +117,15 @@ class HistoryTaskListItem extends StatelessWidget {
             ),
           ),
           actions: [
+            // Reopen action for completed/dismissed/snoozed tasks
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _reopenTask();
+              },
+              icon: const Icon(Icons.undo),
+              label: const Text('Reopen'),
+            ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('Close'),
@@ -84,6 +142,7 @@ class HistoryTaskListItem extends StatelessWidget {
   }
 
   Widget _buildStatusInfo() {
+    final task = widget.task;
     if (task.state == 'COMPLETED' && task.completedAt != null) {
       return Row(
         children: [
@@ -114,12 +173,28 @@ class HistoryTaskListItem extends StatelessWidget {
           ),
         ],
       );
+    } else if (task.state == 'SNOOZED' && task.snoozedUntil != null) {
+      return Row(
+        children: [
+          const Icon(Icons.snooze, color: Colors.orange, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            'Snoozed until ${_formatDate(task.snoozedUntil)}',
+            style: const TextStyle(
+              color: Colors.orange,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
     }
     return const SizedBox.shrink();
   }
 
   @override
   Widget build(BuildContext context) {
+    final task = widget.task;
     return ListTile(
       title: Text(
         task.title,
