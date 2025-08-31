@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/widgets/task_list_item.dart';
+import 'package:emailinator_flutter/widgets/history_task_list_item.dart';
 import 'package:emailinator_flutter/widgets/filter_bar.dart';
 import 'package:emailinator_flutter/screens/settings_screen.dart';
 
@@ -149,6 +150,26 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         ...upcomingTasks
                             .map((task) => TaskListItem(task: task)),
+                      ],
+
+                      // History section
+                      if (appState.showHistory &&
+                          appState.historyTasks.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'History',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[700],
+                                ),
+                          ),
+                        ),
+                        ...appState.historyTasks
+                            .map((task) => HistoryTaskListItem(task: task)),
                       ],
                     ],
                   ),

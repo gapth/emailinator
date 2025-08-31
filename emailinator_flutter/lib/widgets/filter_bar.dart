@@ -76,6 +76,13 @@ class FilterBar extends StatelessWidget {
     onFiltersChanged?.call();
   }
 
+  Future<void> _toggleHistory(BuildContext context) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    appState.setShowHistory(!appState.showHistory);
+    await appState.saveHistoryPreference();
+    onFiltersChanged?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
@@ -110,6 +117,25 @@ class FilterBar extends StatelessWidget {
               fontSize: 12,
             ),
             onPressed: () => _openSettings(context),
+          ),
+        );
+
+        // History toggle chip
+        chips.add(
+          FilterChip(
+            label: const Text('History'),
+            avatar: const Icon(Icons.history, size: 16),
+            selected: appState.showHistory,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            selectedColor: Theme.of(context).colorScheme.tertiaryContainer,
+            checkmarkColor: Theme.of(context).colorScheme.onTertiaryContainer,
+            labelStyle: TextStyle(
+              color: appState.showHistory
+                  ? Theme.of(context).colorScheme.onTertiaryContainer
+                  : Theme.of(context).colorScheme.onSurface,
+              fontSize: 12,
+            ),
+            onSelected: (selected) => _toggleHistory(context),
           ),
         );
 

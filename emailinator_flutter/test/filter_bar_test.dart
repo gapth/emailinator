@@ -65,8 +65,11 @@ void main() {
       );
 
       // Should still show requirement levels chip even when empty (shows "All Requirements")
-      expect(find.byType(ActionChip), findsOneWidget);
+      // And should show History chip
+      expect(find.byType(ActionChip), findsOneWidget); // Requirements chip
+      expect(find.byType(FilterChip), findsOneWidget); // History chip
       expect(find.text('All Requirements'), findsOneWidget);
+      expect(find.text('History'), findsOneWidget);
     });
 
     testWidgets('FilterBar chips are interactive', (WidgetTester tester) async {
@@ -88,8 +91,10 @@ void main() {
         ),
       );
 
-      // Find ActionChip widgets
+      // Find ActionChip widgets (date and requirements)
       expect(find.byType(ActionChip), findsNWidgets(2));
+      // Find FilterChip widget (history)
+      expect(find.byType(FilterChip), findsOneWidget);
 
       // Test that chips are tappable by finding them
       final dateChip = find.ancestor(
