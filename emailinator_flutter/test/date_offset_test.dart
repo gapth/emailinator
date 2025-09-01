@@ -12,8 +12,10 @@ void main() {
       final now = DateTime.now();
 
       // Check that the default range uses the correct offsets
-      expect(defaultRange.start.day, equals(now.add(Duration(days: -7)).day));
-      expect(defaultRange.end.day, equals(now.add(Duration(days: 30)).day));
+      expect(defaultRange.start.day,
+          equals(now.add(const Duration(days: -7)).day));
+      expect(
+          defaultRange.end.day, equals(now.add(const Duration(days: 30)).day));
     });
 
     test('setDateRange calculates and updates offsets approximately', () {
@@ -22,8 +24,8 @@ void main() {
 
       // Set a custom date range
       final customRange = DateTimeRange(
-        start: now.add(Duration(days: -14)), // 2 weeks ago
-        end: now.add(Duration(days: 60)), // 2 months ahead
+        start: now.add(const Duration(days: -14)), // 2 weeks ago
+        end: now.add(const Duration(days: 60)), // 2 months ahead
       );
 
       appState.setDateRange(customRange);
@@ -48,9 +50,9 @@ void main() {
 
       final now = DateTime.now();
       expect(appState.dateRange!.start.day,
-          equals(now.add(Duration(days: -7)).day));
-      expect(
-          appState.dateRange!.end.day, equals(now.add(Duration(days: 30)).day));
+          equals(now.add(const Duration(days: -7)).day));
+      expect(appState.dateRange!.end.day,
+          equals(now.add(const Duration(days: 30)).day));
     });
   });
 }
