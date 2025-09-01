@@ -147,4 +147,21 @@ class AppState extends ChangeNotifier {
       debugPrint('Error saving history preference: $e');
     }
   }
+
+  void setParentRequirementLevels(List<String> levels) {
+    _parentRequirementLevels = List<String>.from(levels);
+    notifyListeners();
+  }
+
+  Future<void> saveParentRequirementLevels() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      await Supabase.instance.client.from('preferences').upsert({
+        'user_id': userId,
+        'parent_requirement_levels': _parentRequirementLevels,
+      });
+    } catch (e) {
+      debugPrint('Error saving parent requirement levels: $e');
+    }
+  }
 }

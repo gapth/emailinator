@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
-import 'package:emailinator_flutter/screens/settings_screen.dart';
 
 class FilterBar extends StatelessWidget {
   final VoidCallback? onFiltersChanged;
@@ -23,7 +22,9 @@ class FilterBar extends StatelessWidget {
   }
 
   String _formatRequirementLevels(List<String> levels) {
-    if (levels.isEmpty) {
+    final allLevels = ['NONE', 'OPTIONAL', 'VOLUNTEER', 'MANDATORY'];
+
+    if (levels.isEmpty || levels.length == allLevels.length) {
       return 'All Requirements';
     }
 
@@ -69,10 +70,66 @@ class FilterBar extends StatelessWidget {
     }
   }
 
-  Future<void> _openSettings(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+  Future<void> _showParentRequirementBottomSheet(BuildContext context) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final allLevels = ['NONE', 'OPTIONAL', 'VOLUNTEER', 'MANDATORY'];
+    List<String> selectedLevels =
+        List<String>.from(appState.getParentRequirementLevels());
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Parent Requirement Levels',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ...allLevels.map((level) {
+                    return CheckboxListTile(
+                      title: Text(level),
+                      value: selectedLevels.contains(level),
+                      onChanged: (bool? value) {
+                        setModalState(() {
+                          if (value == true) {
+                            selectedLevels.add(level);
+                          } else {
+                            selectedLevels.remove(level);
+                          }
+                        });
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
+
+    // Update the app state and save the changes
+    appState.setParentRequirementLevels(selectedLevels);
+    await appState.saveParentRequirementLevels();
+    await appState.fetchTasks(); // Refresh tasks with new filter
     onFiltersChanged?.call();
   }
 
@@ -116,7 +173,7 @@ class FilterBar extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSecondaryContainer,
               fontSize: 12,
             ),
-            onPressed: () => _openSettings(context),
+            onPressed: () => _showParentRequirementBottomSheet(context),
           ),
         );
 

@@ -109,5 +109,87 @@ void main() {
       );
       expect(requirementChip, findsOneWidget);
     });
+
+    testWidgets(
+        'FilterBar shows parent requirement bottom sheet when requirement chip is tapped',
+        (WidgetTester tester) async {
+      final appState = AppState();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppState>.value(
+            value: appState,
+            child: const Scaffold(
+              body: FilterBar(),
+            ),
+          ),
+        ),
+      );
+
+      // Find and tap the requirements chip
+      final requirementChip = find.ancestor(
+        of: find.text('All Requirements'),
+        matching: find.byType(ActionChip),
+      );
+
+      await tester.tap(requirementChip);
+      await tester.pumpAndSettle();
+
+      // Check that the bottom sheet appears with parent requirement levels
+      expect(find.text('Parent Requirement Levels'), findsOneWidget);
+      expect(find.text('NONE'), findsOneWidget);
+      expect(find.text('OPTIONAL'), findsOneWidget);
+      expect(find.text('VOLUNTEER'), findsOneWidget);
+      expect(find.text('MANDATORY'), findsOneWidget);
+
+      // Check that checkboxes are present
+      expect(find.byType(CheckboxListTile), findsNWidgets(4));
+    });
+
+    testWidgets(
+        'FilterBar shows "All Requirements" when all levels are selected',
+        (WidgetTester tester) async {
+      final appState = AppState();
+      // Set all requirement levels
+      appState.setParentRequirementLevels(
+          ['NONE', 'OPTIONAL', 'VOLUNTEER', 'MANDATORY']);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppState>.value(
+            value: appState,
+            child: const Scaffold(
+              body: FilterBar(),
+            ),
+          ),
+        ),
+      );
+
+      // Should show "All Requirements" when all levels are selected
+      expect(find.text('All Requirements'), findsOneWidget);
+      expect(find.byIcon(Icons.assignment), findsOneWidget);
+    });
+
+    testWidgets('FilterBar shows specific levels when partially selected',
+        (WidgetTester tester) async {
+      final appState = AppState();
+      // Set only some requirement levels
+      appState.setParentRequirementLevels(['MANDATORY', 'OPTIONAL']);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppState>.value(
+            value: appState,
+            child: const Scaffold(
+              body: FilterBar(),
+            ),
+          ),
+        ),
+      );
+
+      // Should show the specific selected levels, not "All Requirements"
+      expect(find.text('Mandatory, Optional'), findsOneWidget);
+      expect(find.byIcon(Icons.assignment), findsOneWidget);
+    });
   });
 }

@@ -12,13 +12,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  List<String> _parentRequirementLevels = [];
-  final List<String> _allLevels = [
-    'NONE',
-    'OPTIONAL',
-    'VOLUNTEER',
-    'MANDATORY'
-  ];
   String? _forwardAlias;
   String? _verificationLink;
   int? _verificationId;
@@ -31,16 +24,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final userId = Supabase.instance.client.auth.currentUser!.id;
-    final response = await Supabase.instance.client
-        .from('preferences')
-        .select('parent_requirement_levels')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-    if (response != null) {
-      _parentRequirementLevels =
-          List<String>.from(response['parent_requirement_levels'] ?? []);
-    }
 
     final aliasRow = await Supabase.instance.client
         .from('email_aliases')
@@ -80,28 +63,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _saveSettings() async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
-    try {
-      await Supabase.instance.client.from('preferences').upsert({
-        'user_id': userId,
-        'parent_requirement_levels': _parentRequirementLevels,
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settings saved!')),
-        );
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save settings: $e')),
-        );
-      }
-    }
-  }
-
   Future<void> _launchVerification() async {
     if (_verificationLink == null) return;
     final uri = Uri.parse(_verificationLink!);
@@ -126,12 +87,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveSettings,
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
@@ -159,24 +114,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
             ),
-          if (_forwardAlias != null) const SizedBox(height: 16),
-          Text('Parent Requirement Levels',
-              style: Theme.of(context).textTheme.titleLarge),
-          ..._allLevels.map((level) {
-            return CheckboxListTile(
-              title: Text(level),
-              value: _parentRequirementLevels.contains(level),
-              onChanged: (bool? value) {
-                setState(() {
-                  if (value == true) {
-                    _parentRequirementLevels.add(level);
-                  } else {
-                    _parentRequirementLevels.remove(level);
-                  }
-                });
-              },
-            );
-          }),
         ],
       ),
     );
