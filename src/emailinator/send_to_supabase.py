@@ -1,12 +1,12 @@
 import argparse
 import email
 import os
-from pathlib import Path
-from email.message import Message
 from email.header import decode_header, make_header
+from email.message import Message
+from pathlib import Path
 
-from bs4 import BeautifulSoup
 import requests
+from bs4 import BeautifulSoup
 
 
 def read_email_file(path: str) -> Message:

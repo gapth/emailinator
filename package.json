@@ -7,15 +7,19 @@
     "test": "tests"
   },
   "scripts": {
+    "test": "npm run test:inbound-email && npm run test:reprocess-unprocessed && npm run test:deposit-budget",
+    "test:parallel": "npm run test:inbound-email & npm run test:reprocess-unprocessed & npm run test:deposit-budget & wait",
     "test:inbound-email": "tsx supabase/functions/inbound-email/index.test.ts",
     "test:reprocess-unprocessed": "tsx supabase/functions/reprocess-unprocessed/index.test.ts",
-    "test:deposit-budget": "tsx supabase/functions/deposit-budget/index.test.ts"
+    "test:deposit-budget": "tsx supabase/functions/deposit-budget/index.test.ts",
+    "format": "prettier --write \"supabase/functions/**/*.{js,ts,json}\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "tsx": "^4.0.0"
+    "tsx": "^4.0.0",
+    "prettier": "^3.0.0"
   }
 }

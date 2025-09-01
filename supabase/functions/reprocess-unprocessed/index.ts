@@ -4,7 +4,7 @@ import {
   chooseEmailText,
   INPUT_NANO_USD_PER_TOKEN,
   OUTPUT_NANO_USD_PER_TOKEN,
-} from "../_shared/task-utils.ts";
+} from '../_shared/task-utils.ts';
 
 export interface Deps {
   supabase: any;
@@ -13,17 +13,24 @@ export interface Deps {
   serviceRoleKey: string;
 }
 
-export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }: Deps) {
+export function createHandler({
+  supabase,
+  fetch,
+  openAiApiKey,
+  serviceRoleKey,
+}: Deps) {
   return async function handler(req: Request): Promise<Response> {
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+    if (req.method !== 'POST')
+      return new Response('Method Not Allowed', { status: 405 });
 
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${serviceRoleKey}`) return new Response("Unauthorized", { status: 401 });
+    const auth = req.headers.get('authorization');
+    if (auth !== `Bearer ${serviceRoleKey}`)
+      return new Response('Unauthorized', { status: 401 });
 
     const { data: raws, error } = await supabase
-      .from("raw_emails")
-      .select("*")
-      .eq("status", "UNPROCESSED");
+      .from('raw_emails')
+      .select('*')
+      .eq('status', 'UNPROCESSED');
     if (error) return new Response(error.message, { status: 500 });
 
     let processed = 0;
@@ -33,18 +40,18 @@ export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }:
         const emailText = chooseEmailText(raw);
 
         const { data: budgetRow, error: budgetError } = await supabase
-          .from("processing_budgets")
-          .select("remaining_nano_usd")
-          .eq("user_id", user_id)
+          .from('processing_budgets')
+          .select('remaining_nano_usd')
+          .eq('user_id', user_id)
           .single();
         const remainingBudget = budgetError ? 0 : budgetRow.remaining_nano_usd;
         if (remainingBudget <= 0) continue;
 
         const { data: existingRaw, error: existingError } = await supabase
-          .from("user_tasks")
-          .select("*")
-          .eq("user_id", user_id)
-          .eq("state", "OPEN");
+          .from('user_tasks')
+          .select('*')
+          .eq('user_id', user_id)
+          .eq('state', 'OPEN');
         if (existingError) continue;
 
         const existingRows = Array.isArray(existingRaw) ? existingRaw : [];
@@ -65,7 +72,7 @@ export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }:
             openAiApiKey,
             emailText,
             existingForAi,
-            user_id,
+            user_id
           );
 
         const result = await replaceTasksAndUpdateEmail({
@@ -77,16 +84,17 @@ export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }:
           promptTokens,
           completionTokens,
           rawContent,
-          logPrefix: "reprocess-unprocessed",
+          logPrefix: 'reprocess-unprocessed',
         });
         if (result.success) {
           processed++;
           const totalCost =
             promptTokens * INPUT_NANO_USD_PER_TOKEN +
             completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
-          await supabase
-            .from("processing_budgets")
-            .upsert({ user_id, remaining_nano_usd: remainingBudget - totalCost });
+          await supabase.from('processing_budgets').upsert({
+            user_id,
+            remaining_nano_usd: remainingBudget - totalCost,
+          });
         }
       } catch (e) {
         console.error(`[reprocess-unprocessed] email_id=${raw.id} error=${e}`);
@@ -94,18 +102,18 @@ export function createHandler({ supabase, fetch, openAiApiKey, serviceRoleKey }:
     }
 
     return new Response(JSON.stringify({ processed }), {
-      headers: { "content-type": "application/json" },
+      headers: { 'content-type': 'application/json' },
       status: 200,
     });
   };
 }
 
 if (import.meta.main) {
-  const { createClient } = await import("jsr:@supabase/supabase-js@2");
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const { createClient } = await import('jsr:@supabase/supabase-js@2');
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
-  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!;
   const handler = createHandler({
     supabase,
     fetch,
