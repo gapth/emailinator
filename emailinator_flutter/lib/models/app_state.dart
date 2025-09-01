@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/task.dart';
 
 class AppState extends ChangeNotifier {
-  List<Task> _tasks = [];
+  List<Task> _overdueTasks = [];
+  List<Task> _upcomingTasks = [];
   List<Task> _historyTasks = [];
   bool _isLoading = false;
   DateTimeRange? _dateRange;
@@ -11,8 +12,12 @@ class AppState extends ChangeNotifier {
   List<String> _parentRequirementLevels = [];
   int _dateStartOffsetDays = -7;
   int _dateEndOffsetDays = 30;
+  int _overdueGraceDays = 14;
 
-  List<Task> get tasks => _tasks;
+  // Computed property that combines overdue and upcoming tasks for backward compatibility
+  List<Task> get tasks => [..._overdueTasks, ..._upcomingTasks];
+  List<Task> get overdueTasks => _overdueTasks;
+  List<Task> get upcomingTasks => _upcomingTasks;
   List<Task> get historyTasks => _historyTasks;
   bool get isLoading => _isLoading;
   bool get showHistory => _showHistory;
@@ -21,6 +26,7 @@ class AppState extends ChangeNotifier {
       List<String>.from(_parentRequirementLevels);
   int get dateStartOffsetDays => _dateStartOffsetDays;
   int get dateEndOffsetDays => _dateEndOffsetDays;
+  int get overdueGraceDays => _overdueGraceDays;
 
   void setDateRange(DateTimeRange? newDateRange) {
     _dateRange = newDateRange;
@@ -56,6 +62,21 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setOverdueGraceDays(int days) {
+    _overdueGraceDays = days;
+    notifyListeners();
+  }
+
+  /// Get overdue tasks - now returns the fetched overdue tasks
+  List<Task> getOverdueTasks() {
+    return _overdueTasks;
+  }
+
+  /// Get upcoming tasks - now returns the fetched upcoming tasks
+  List<Task> getUpcomingTasks() {
+    return _upcomingTasks;
+  }
+
   Future<void> fetchTasks() async {
     _isLoading = true;
     notifyListeners();
@@ -66,7 +87,7 @@ class AppState extends ChangeNotifier {
       final prefs = await Supabase.instance.client
           .from('preferences')
           .select(
-              'parent_requirement_levels, show_history, date_start_offset_days, date_end_offset_days')
+              'parent_requirement_levels, show_history, date_start_offset_days, date_end_offset_days, overdue_grace_days')
           .eq('user_id', userId)
           .maybeSingle();
 
@@ -76,31 +97,17 @@ class AppState extends ChangeNotifier {
         _showHistory = prefs['show_history'] ?? false;
         _dateStartOffsetDays = prefs['date_start_offset_days'] ?? -7;
         _dateEndOffsetDays = prefs['date_end_offset_days'] ?? 30;
+        _overdueGraceDays = prefs['overdue_grace_days'] ?? 14;
       }
 
-      var query = Supabase.instance.client.from('user_tasks').select().or(
-          'state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateTime.now().toIso8601String()})');
+      // Fetch all sections in parallel
+      await Future.wait([
+        _fetchOverdueTasks(),
+        _fetchUpcomingTasks(),
+        if (_showHistory) _fetchHistoryTasks(),
+      ]);
 
-      if (_parentRequirementLevels.isNotEmpty) {
-        query = query.inFilter(
-            'parent_requirement_level', _parentRequirementLevels);
-      }
-
-      if (_dateRange != null) {
-        // Always include tasks with no due date and tasks within the date range
-        query = query.or(
-            'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
-      }
-      // Note: We always include tasks with no due date since creation date is used as effective due date
-
-      final response = await query.order('due_date', ascending: true);
-
-      _tasks = (response as List).map((item) => Task.fromJson(item)).toList();
-
-      // Fetch history tasks if enabled
-      if (_showHistory) {
-        await _fetchHistoryTasks();
-      } else {
+      if (!_showHistory) {
         _historyTasks = [];
       }
     } catch (e) {
@@ -112,22 +119,100 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> _fetchOverdueTasks() async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final graceThreshold = today.subtract(Duration(days: _overdueGraceDays));
+
+      var overdueQuery = Supabase.instance.client
+          .from('user_tasks')
+          .select()
+          .or('state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateTime.now().toIso8601String()})')
+          .or('due_date.is.null,due_date.lt.${today.toIso8601String()}'); // Past due or no due date
+
+      if (_parentRequirementLevels.isNotEmpty) {
+        overdueQuery = overdueQuery.inFilter(
+            'parent_requirement_level', _parentRequirementLevels);
+      }
+
+      final overdueResponse =
+          await overdueQuery.order('due_date', ascending: true);
+      final overdueCandidates =
+          (overdueResponse as List).map((item) => Task.fromJson(item)).toList();
+
+      // Filter in memory to apply grace period logic for tasks with no due date
+      _overdueTasks = overdueCandidates.where((task) {
+        final effectiveDueDate = task.dueDate ?? task.createdAt;
+        final taskDay = DateTime(effectiveDueDate.year, effectiveDueDate.month,
+            effectiveDueDate.day);
+
+        // Task is overdue (due date in the past) AND within grace period
+        return taskDay.isBefore(today) && !taskDay.isBefore(graceThreshold);
+      }).toList();
+    } catch (e) {
+      debugPrint('Error fetching overdue tasks: $e');
+      _overdueTasks = [];
+    }
+  }
+
+  Future<void> _fetchUpcomingTasks() async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      var upcomingQuery = Supabase.instance.client.from('user_tasks').select().or(
+          'state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateTime.now().toIso8601String()})');
+
+      if (_parentRequirementLevels.isNotEmpty) {
+        upcomingQuery = upcomingQuery.inFilter(
+            'parent_requirement_level', _parentRequirementLevels);
+      }
+
+      if (_dateRange != null) {
+        // Date range controls upcoming section only
+        upcomingQuery = upcomingQuery.or(
+            'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
+      }
+
+      final upcomingResponse =
+          await upcomingQuery.order('due_date', ascending: true);
+      final upcomingCandidates = (upcomingResponse as List)
+          .map((item) => Task.fromJson(item))
+          .toList();
+
+      // Filter to only include tasks due today or in the future
+      _upcomingTasks = upcomingCandidates.where((task) {
+        final effectiveDueDate = task.dueDate ?? task.createdAt;
+        final taskDay = DateTime(effectiveDueDate.year, effectiveDueDate.month,
+            effectiveDueDate.day);
+
+        // Task is due today or in the future
+        return !taskDay.isBefore(today);
+      }).toList();
+    } catch (e) {
+      debugPrint('Error fetching upcoming tasks: $e');
+      _upcomingTasks = [];
+    }
+  }
+
   Future<void> _fetchHistoryTasks() async {
     try {
-      var historyQuery = Supabase.instance.client.from('user_tasks').select().or(
-          'state.eq.COMPLETED,state.eq.DISMISSED,and(state.eq.SNOOZED,snoozed_until.gt.${DateTime.now().toIso8601String()})');
+      final now = DateTime.now();
+      final historyThreshold = now.subtract(const Duration(days: 60));
+
+      var historyQuery = Supabase.instance.client
+          .from('user_tasks')
+          .select()
+          .or(
+              'state.eq.COMPLETED,state.eq.DISMISSED,and(state.eq.SNOOZED,snoozed_until.gt.${DateTime.now().toIso8601String()})')
+          .gte('updated_at',
+              historyThreshold.toIso8601String()); // Only last 60 days
 
       if (_parentRequirementLevels.isNotEmpty) {
         historyQuery = historyQuery.inFilter(
             'parent_requirement_level', _parentRequirementLevels);
       }
-
-      if (_dateRange != null) {
-        // Always include tasks with no due date and tasks within the date range
-        historyQuery = historyQuery.or(
-            'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
-      }
-      // Note: We always include tasks with no due date since creation date is used as effective due date
 
       final historyResponse = await historyQuery
           .order('completed_at', ascending: false)
@@ -142,29 +227,45 @@ class AppState extends ChangeNotifier {
   }
 
   void removeTask(String taskId) {
-    _tasks.removeWhere((task) => task.id == taskId);
+    _overdueTasks.removeWhere((task) => task.id == taskId);
+    _upcomingTasks.removeWhere((task) => task.id == taskId);
     notifyListeners();
   }
 
   void addTask(Task task) {
-    // Avoid duplicates if already present
-    if (_tasks.indexWhere((t) => t.id == task.id) == -1) {
-      _tasks.add(task);
-      notifyListeners();
+    // Remove from all lists first to avoid duplicates
+    removeTask(task.id);
+
+    // Add to appropriate list based on task date
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final effectiveDueDate = task.dueDate ?? task.createdAt;
+    final taskDay = DateTime(
+        effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
+
+    if (taskDay.isBefore(today)) {
+      // Check if within grace period for overdue
+      final graceThreshold = today.subtract(Duration(days: _overdueGraceDays));
+      if (!taskDay.isBefore(graceThreshold)) {
+        _overdueTasks.add(task);
+      }
+    } else {
+      _upcomingTasks.add(task);
     }
+
+    notifyListeners();
   }
 
   /// Insert a task back at a specific index (used for undo operations).
-  /// If the index is out of range it will be clamped to the valid bounds.
-  /// Will not insert if a task with the same id already exists.
+  /// This works with the combined tasks list for backward compatibility.
   void insertTaskAt(Task task, int index) {
-    if (_tasks.indexWhere((t) => t.id == task.id) != -1) {
+    final combinedTasks = tasks; // Get current combined list
+    if (combinedTasks.indexWhere((t) => t.id == task.id) != -1) {
       return; // already present
     }
-    if (index < 0) index = 0;
-    if (index > _tasks.length) index = _tasks.length;
-    _tasks.insert(index, task);
-    notifyListeners();
+
+    // Simply use addTask which will put it in the right section
+    addTask(task);
   }
 
   Future<void> saveHistoryPreference() async {
@@ -206,6 +307,18 @@ class AppState extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('Error saving date offset preferences: $e');
+    }
+  }
+
+  Future<void> saveOverdueGraceDays() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      await Supabase.instance.client.from('preferences').upsert({
+        'user_id': userId,
+        'overdue_grace_days': _overdueGraceDays,
+      });
+    } catch (e) {
+      debugPrint('Error saving overdue grace days: $e');
     }
   }
 }

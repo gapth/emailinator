@@ -138,6 +138,80 @@ class FilterBar extends StatelessWidget {
     onFiltersChanged?.call();
   }
 
+  Future<void> _showOverdueBottomSheet(BuildContext context) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    double selectedDays = appState.overdueGraceDays.toDouble();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Overdue Grace Period',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Show overdue tasks in the last ${selectedDays.round()} days',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    '${selectedDays.round()} days',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  Slider(
+                    value: selectedDays,
+                    min: 0,
+                    max: 30,
+                    divisions: 30,
+                    onChanged: (double value) {
+                      setModalState(() {
+                        selectedDays = value;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('0 days',
+                          style: Theme.of(context).textTheme.labelMedium),
+                      Text('30 days',
+                          style: Theme.of(context).textTheme.labelMedium),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // Update the app state and save the changes
+    appState.setOverdueGraceDays(selectedDays.round());
+    await appState.saveOverdueGraceDays();
+    onFiltersChanged?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
@@ -160,18 +234,17 @@ class FilterBar extends StatelessWidget {
           );
         }
 
-        // Requirement levels chip
+        // Overdue chip
         chips.add(
           ActionChip(
-            label: Text(_formatRequirementLevels(
-                appState.getParentRequirementLevels())),
-            avatar: const Icon(Icons.assignment, size: 16),
-            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            label: Text('Overdue: ${appState.overdueGraceDays}d'),
+            avatar: const Icon(Icons.schedule, size: 16),
+            backgroundColor: Colors.red.shade50,
             labelStyle: TextStyle(
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
+              color: Colors.red.shade700,
               fontSize: 12,
             ),
-            onPressed: () => _showParentRequirementBottomSheet(context),
+            onPressed: () => _showOverdueBottomSheet(context),
           ),
         );
 
@@ -191,6 +264,21 @@ class FilterBar extends StatelessWidget {
               fontSize: 12,
             ),
             onSelected: (selected) => _toggleHistory(context),
+          ),
+        );
+
+        // Requirement levels chip
+        chips.add(
+          ActionChip(
+            label: Text(_formatRequirementLevels(
+                appState.getParentRequirementLevels())),
+            avatar: const Icon(Icons.assignment, size: 16),
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            labelStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+              fontSize: 12,
+            ),
+            onPressed: () => _showParentRequirementBottomSheet(context),
           ),
         );
 

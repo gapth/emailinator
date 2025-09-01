@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:emailinator_flutter/models/app_state.dart';
-import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/widgets/task_list_item.dart';
 import 'package:emailinator_flutter/widgets/history_task_list_item.dart';
 import 'package:emailinator_flutter/widgets/filter_bar.dart';
@@ -70,32 +69,20 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Consumer<AppState>(
               builder: (context, appState, child) {
-                if (appState.isLoading && appState.tasks.isEmpty) {
+                if (appState.isLoading &&
+                    appState.overdueTasks.isEmpty &&
+                    appState.upcomingTasks.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (appState.tasks.isEmpty) {
+                if (appState.overdueTasks.isEmpty &&
+                    appState.upcomingTasks.isEmpty) {
                   return const Center(child: Text('No tasks found.'));
                 }
 
-                // Separate tasks into overdue and upcoming
-                final now = DateTime.now();
-                final today = DateTime(now.year, now.month, now.day);
-
-                final overdueTasks = <Task>[];
-                final upcomingTasks = <Task>[];
-
-                for (final task in appState.tasks) {
-                  final taskDate = task.dueDate ?? task.createdAt;
-                  final taskDay =
-                      DateTime(taskDate.year, taskDate.month, taskDate.day);
-
-                  if (taskDay.isBefore(today)) {
-                    overdueTasks.add(task);
-                  } else {
-                    upcomingTasks.add(task);
-                  }
-                }
+                // Get overdue and upcoming tasks using AppState properties
+                final overdueTasks = appState.overdueTasks;
+                final upcomingTasks = appState.upcomingTasks;
 
                 // Sort each section by effective date (due date or created date)
                 overdueTasks.sort((a, b) {
@@ -114,23 +101,31 @@ class _HomeScreenState extends State<HomeScreen> {
                   onRefresh: _loadTasks,
                   child: ListView(
                     children: [
-                      // Overdue section
-                      if (overdueTasks.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
+                      // Overdue section - always shown at the top
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Overdue',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.red.shade700,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                      ),
+                      if (overdueTasks.isNotEmpty)
+                        ...overdueTasks.map((task) => TaskListItem(task: task))
+                      else
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0),
                           child: Text(
-                            'Overdue',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  color: Colors.red.shade700,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            'No overdue tasks',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ),
-                        ...overdueTasks.map((task) => TaskListItem(task: task)),
-                      ],
 
                       // Upcoming section
                       if (upcomingTasks.isNotEmpty) ...[

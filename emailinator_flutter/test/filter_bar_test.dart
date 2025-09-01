@@ -30,6 +30,24 @@ void main() {
       expect(find.byIcon(Icons.date_range), findsOneWidget);
     });
 
+    testWidgets('FilterBar displays overdue chip', (WidgetTester tester) async {
+      final appState = AppState();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<AppState>.value(
+            value: appState,
+            child: const Scaffold(
+              body: FilterBar(),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Overdue: 14d'), findsOneWidget);
+      expect(find.byIcon(Icons.schedule), findsOneWidget);
+    });
+
     testWidgets('FilterBar displays requirement levels chip',
         (WidgetTester tester) async {
       final appState = AppState();
@@ -64,12 +82,13 @@ void main() {
         ),
       );
 
-      // Should still show requirement levels chip even when empty (shows "All Requirements")
-      // And should show History chip
-      expect(find.byType(ActionChip), findsOneWidget); // Requirements chip
+      // Should show overdue chip, requirement levels chip, and history chip
+      expect(find.byType(ActionChip),
+          findsNWidgets(2)); // Overdue + Requirements chips
       expect(find.byType(FilterChip), findsOneWidget); // History chip
       expect(find.text('All Requirements'), findsOneWidget);
       expect(find.text('History'), findsOneWidget);
+      expect(find.text('Overdue: 14d'), findsOneWidget); // New overdue chip
     });
 
     testWidgets('FilterBar chips are interactive', (WidgetTester tester) async {
@@ -91,8 +110,8 @@ void main() {
         ),
       );
 
-      // Find ActionChip widgets (date and requirements)
-      expect(find.byType(ActionChip), findsNWidgets(2));
+      // Find ActionChip widgets (date, overdue, and requirements)
+      expect(find.byType(ActionChip), findsNWidgets(3));
       // Find FilterChip widget (history)
       expect(find.byType(FilterChip), findsOneWidget);
 
