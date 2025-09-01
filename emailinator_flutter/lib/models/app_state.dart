@@ -7,7 +7,6 @@ class AppState extends ChangeNotifier {
   List<Task> _historyTasks = [];
   bool _isLoading = false;
   DateTimeRange? _dateRange;
-  bool _includeNoDueDate = true;
   bool _showHistory = false;
   List<String> _parentRequirementLevels = [];
 
@@ -38,15 +37,13 @@ class AppState extends ChangeNotifier {
       // First, get user preferences
       final prefs = await Supabase.instance.client
           .from('preferences')
-          .select(
-              'parent_requirement_levels, include_no_due_date, show_history')
+          .select('parent_requirement_levels, show_history')
           .eq('user_id', userId)
           .maybeSingle();
 
       if (prefs != null) {
         _parentRequirementLevels =
             List<String>.from(prefs['parent_requirement_levels'] ?? []);
-        _includeNoDueDate = prefs['include_no_due_date'] ?? true;
         _showHistory = prefs['show_history'] ?? false;
       }
 
@@ -59,17 +56,11 @@ class AppState extends ChangeNotifier {
       }
 
       if (_dateRange != null) {
-        if (_includeNoDueDate) {
-          query = query.or(
-              'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
-        } else {
-          query = query
-              .gte('due_date', _dateRange!.start.toIso8601String())
-              .lte('due_date', _dateRange!.end.toIso8601String());
-        }
-      } else if (!_includeNoDueDate) {
-        query = query.not('due_date', 'is', null);
+        // Always include tasks with no due date and tasks within the date range
+        query = query.or(
+            'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
       }
+      // Note: We always include tasks with no due date since creation date is used as effective due date
 
       final response = await query.order('due_date', ascending: true);
 
@@ -101,17 +92,11 @@ class AppState extends ChangeNotifier {
       }
 
       if (_dateRange != null) {
-        if (_includeNoDueDate) {
-          historyQuery = historyQuery.or(
-              'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
-        } else {
-          historyQuery = historyQuery
-              .gte('due_date', _dateRange!.start.toIso8601String())
-              .lte('due_date', _dateRange!.end.toIso8601String());
-        }
-      } else if (!_includeNoDueDate) {
-        historyQuery = historyQuery.not('due_date', 'is', null);
+        // Always include tasks with no due date and tasks within the date range
+        historyQuery = historyQuery.or(
+            'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
       }
+      // Note: We always include tasks with no due date since creation date is used as effective due date
 
       final historyResponse = await historyQuery
           .order('completed_at', ascending: false)

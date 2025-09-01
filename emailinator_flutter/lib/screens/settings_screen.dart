@@ -12,7 +12,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _includeNoDueDate = true;
   List<String> _parentRequirementLevels = [];
   final List<String> _allLevels = [
     'NONE',
@@ -34,12 +33,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userId = Supabase.instance.client.auth.currentUser!.id;
     final response = await Supabase.instance.client
         .from('preferences')
-        .select('parent_requirement_levels, include_no_due_date')
+        .select('parent_requirement_levels')
         .eq('user_id', userId)
         .maybeSingle();
 
     if (response != null) {
-      _includeNoDueDate = response['include_no_due_date'] ?? true;
       _parentRequirementLevels =
           List<String>.from(response['parent_requirement_levels'] ?? []);
     }
@@ -88,7 +86,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await Supabase.instance.client.from('preferences').upsert({
         'user_id': userId,
         'parent_requirement_levels': _parentRequirementLevels,
-        'include_no_due_date': _includeNoDueDate,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -163,16 +160,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           if (_forwardAlias != null) const SizedBox(height: 16),
-          SwitchListTile(
-            title: const Text('Include tasks with no due date'),
-            value: _includeNoDueDate,
-            onChanged: (bool value) {
-              setState(() {
-                _includeNoDueDate = value;
-              });
-            },
-          ),
-          const SizedBox(height: 16),
           Text('Parent Requirement Levels',
               style: Theme.of(context).textTheme.titleLarge),
           ..._allLevels.map((level) {
