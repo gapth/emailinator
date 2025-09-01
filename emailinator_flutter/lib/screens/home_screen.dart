@@ -21,13 +21,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final appState = Provider.of<AppState>(context, listen: false);
-      if (appState.dateRange == null) {
-        final today = DateTime.now();
-        final pastWeek = today.subtract(const Duration(days: 7));
-        final futureMonth = today.add(const Duration(days: 30));
-        appState.setDateRange(DateTimeRange(start: pastWeek, end: futureMonth));
-      }
       _loadTasks();
     });
   }
@@ -35,6 +28,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadTasks() async {
     final appState = Provider.of<AppState>(context, listen: false);
     await appState.fetchTasks();
+
+    // Set default date range if none is set, using the loaded offset preferences
+    if (appState.dateRange == null) {
+      appState.setDateRangeToDefault();
+    }
   }
 
   Future<void> _signOut() async {

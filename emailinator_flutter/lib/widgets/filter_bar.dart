@@ -52,11 +52,9 @@ class FilterBar extends StatelessWidget {
 
   Future<void> _selectDateRange(BuildContext context) async {
     final appState = Provider.of<AppState>(context, listen: false);
-    final initialDateRange = appState.dateRange ??
-        DateTimeRange(
-          start: DateTime.now().subtract(const Duration(days: 7)),
-          end: DateTime.now().add(const Duration(days: 30)),
-        );
+    final initialDateRange =
+        appState.dateRange ?? appState.getDefaultDateRange();
+
     final newDateRange = await showDateRangePicker(
       context: context,
       firstDate: DateTime(DateTime.now().year - 5),

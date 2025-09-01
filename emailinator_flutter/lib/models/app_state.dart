@@ -9,6 +9,8 @@ class AppState extends ChangeNotifier {
   DateTimeRange? _dateRange;
   bool _showHistory = false;
   List<String> _parentRequirementLevels = [];
+  int _dateStartOffsetDays = -7;
+  int _dateEndOffsetDays = 30;
 
   List<Task> get tasks => _tasks;
   List<Task> get historyTasks => _historyTasks;
@@ -17,9 +19,35 @@ class AppState extends ChangeNotifier {
   DateTimeRange? get dateRange => _dateRange;
   List<String> getParentRequirementLevels() =>
       List<String>.from(_parentRequirementLevels);
+  int get dateStartOffsetDays => _dateStartOffsetDays;
+  int get dateEndOffsetDays => _dateEndOffsetDays;
 
   void setDateRange(DateTimeRange? newDateRange) {
     _dateRange = newDateRange;
+
+    // Calculate and save new offsets when user manually selects a date range
+    if (newDateRange != null) {
+      final now = DateTime.now();
+      _dateStartOffsetDays = newDateRange.start.difference(now).inDays;
+      _dateEndOffsetDays = newDateRange.end.difference(now).inDays;
+      _saveDateOffsetPreferences();
+    }
+
+    notifyListeners();
+  }
+
+  /// Get the default date range based on current offset preferences
+  DateTimeRange getDefaultDateRange() {
+    final now = DateTime.now();
+    return DateTimeRange(
+      start: now.add(Duration(days: _dateStartOffsetDays)),
+      end: now.add(Duration(days: _dateEndOffsetDays)),
+    );
+  }
+
+  /// Set the date range to the default based on current offset preferences
+  void setDateRangeToDefault() {
+    _dateRange = getDefaultDateRange();
     notifyListeners();
   }
 
@@ -37,7 +65,8 @@ class AppState extends ChangeNotifier {
       // First, get user preferences
       final prefs = await Supabase.instance.client
           .from('preferences')
-          .select('parent_requirement_levels, show_history')
+          .select(
+              'parent_requirement_levels, show_history, date_start_offset_days, date_end_offset_days')
           .eq('user_id', userId)
           .maybeSingle();
 
@@ -45,6 +74,8 @@ class AppState extends ChangeNotifier {
         _parentRequirementLevels =
             List<String>.from(prefs['parent_requirement_levels'] ?? []);
         _showHistory = prefs['show_history'] ?? false;
+        _dateStartOffsetDays = prefs['date_start_offset_days'] ?? -7;
+        _dateEndOffsetDays = prefs['date_end_offset_days'] ?? 30;
       }
 
       var query = Supabase.instance.client.from('user_tasks').select().or(
@@ -162,6 +193,19 @@ class AppState extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('Error saving parent requirement levels: $e');
+    }
+  }
+
+  Future<void> _saveDateOffsetPreferences() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      await Supabase.instance.client.from('preferences').upsert({
+        'user_id': userId,
+        'date_start_offset_days': _dateStartOffsetDays,
+        'date_end_offset_days': _dateEndOffsetDays,
+      });
+    } catch (e) {
+      debugPrint('Error saving date offset preferences: $e');
     }
   }
 }
