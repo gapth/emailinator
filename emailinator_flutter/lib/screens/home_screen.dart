@@ -71,12 +71,16 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (context, appState, child) {
                 if (appState.isLoading &&
                     appState.overdueTasks.isEmpty &&
-                    appState.upcomingTasks.isEmpty) {
+                    appState.upcomingTasks.isEmpty &&
+                    appState.completedTasks.isEmpty &&
+                    appState.dismissedTasks.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
                 if (appState.overdueTasks.isEmpty &&
-                    appState.upcomingTasks.isEmpty) {
+                    appState.upcomingTasks.isEmpty &&
+                    appState.completedTasks.isEmpty &&
+                    appState.dismissedTasks.isEmpty) {
                   return const Center(child: Text('No tasks found.'));
                 }
 
@@ -127,29 +131,34 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
-                      // Upcoming section
-                      if (upcomingTasks.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
+                      // Upcoming section - always shown
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Upcoming',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                      ),
+                      if (upcomingTasks.isNotEmpty)
+                        ...upcomingTasks.map((task) => TaskListItem(task: task))
+                      else
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0),
                           child: Text(
-                            'Upcoming',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            'No upcoming tasks',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ),
-                        ...upcomingTasks
-                            .map((task) => TaskListItem(task: task)),
-                      ],
 
-                      // Resolved section (formerly History)
-                      if ((appState.resolvedShowCompleted ||
-                              appState.resolvedShowDismissed) &&
-                          (appState.completedTasks.isNotEmpty ||
-                              appState.dismissedTasks.isNotEmpty)) ...[
+                      // Resolved section (formerly History) - always shown if filters allow
+                      if (appState.resolvedShowCompleted ||
+                          appState.resolvedShowDismissed) ...[
                         Padding(
                           padding: const EdgeInsets.all(16.0),
                           child: Text(
@@ -164,29 +173,55 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
-                        // Completed group
-                        if (appState.resolvedShowCompleted &&
-                            appState.completedTasks.isNotEmpty) ...[
+                        // Completed group - always shown if filter allows
+                        if (appState.resolvedShowCompleted) ...[
                           ExpansionTile(
                             title: Text(
                                 'Completed (${appState.completedTasks.length})'),
                             initiallyExpanded: true,
-                            children: appState.completedTasks
-                                .map((task) => ResolvedTaskListItem(task: task))
-                                .toList(),
+                            children: appState.completedTasks.isNotEmpty
+                                ? appState.completedTasks
+                                    .map((task) =>
+                                        ResolvedTaskListItem(task: task))
+                                    .toList()
+                                : [
+                                    const Padding(
+                                      padding: EdgeInsets.all(16.0),
+                                      child: Text(
+                                        'No completed tasks',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                           ),
                         ],
 
-                        // Dismissed group
-                        if (appState.resolvedShowDismissed &&
-                            appState.dismissedTasks.isNotEmpty) ...[
+                        // Dismissed group - always shown if filter allows
+                        if (appState.resolvedShowDismissed) ...[
                           ExpansionTile(
                             title: Text(
                                 'Dismissed (${appState.dismissedTasks.length})'),
                             initiallyExpanded: true,
-                            children: appState.dismissedTasks
-                                .map((task) => ResolvedTaskListItem(task: task))
-                                .toList(),
+                            children: appState.dismissedTasks.isNotEmpty
+                                ? appState.dismissedTasks
+                                    .map((task) =>
+                                        ResolvedTaskListItem(task: task))
+                                    .toList()
+                                : [
+                                    const Padding(
+                                      padding: EdgeInsets.all(16.0),
+                                      child: Text(
+                                        'No dismissed tasks',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                           ),
                         ],
                       ],
