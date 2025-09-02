@@ -82,12 +82,11 @@ void main() {
         ),
       );
 
-      // Should show overdue chip, requirement levels chip, and history chip
+      // Should show overdue chip, requirement levels chip, and resolved chip
       expect(find.byType(ActionChip),
-          findsNWidgets(2)); // Overdue + Requirements chips
-      expect(find.byType(FilterChip), findsOneWidget); // History chip
+          findsNWidgets(3)); // Overdue + Requirements + Resolved chips
       expect(find.text('All Requirements'), findsOneWidget);
-      expect(find.text('History'), findsOneWidget);
+      expect(find.textContaining('Resolved'), findsOneWidget);
       expect(find.text('Overdue: 14d'), findsOneWidget); // New overdue chip
     });
 
@@ -110,10 +109,8 @@ void main() {
         ),
       );
 
-      // Find ActionChip widgets (date, overdue, and requirements)
-      expect(find.byType(ActionChip), findsNWidgets(3));
-      // Find FilterChip widget (history)
-      expect(find.byType(FilterChip), findsOneWidget);
+      // Find ActionChip widgets (date, overdue, requirements, and resolved)
+      expect(find.byType(ActionChip), findsNWidgets(4));
 
       // Test that chips are tappable by finding them
       final dateChip = find.ancestor(

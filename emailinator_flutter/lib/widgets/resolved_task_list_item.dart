@@ -6,16 +6,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 
-class HistoryTaskListItem extends StatefulWidget {
+class ResolvedTaskListItem extends StatefulWidget {
   final Task task;
 
-  const HistoryTaskListItem({super.key, required this.task});
+  const ResolvedTaskListItem({super.key, required this.task});
 
   @override
-  State<HistoryTaskListItem> createState() => _HistoryTaskListItemState();
+  State<ResolvedTaskListItem> createState() => _ResolvedTaskListItemState();
 }
 
-class _HistoryTaskListItemState extends State<HistoryTaskListItem> {
+class _ResolvedTaskListItemState extends State<ResolvedTaskListItem> {
   bool _isProcessing = false;
 
   Future<void> _reopenTask() async {

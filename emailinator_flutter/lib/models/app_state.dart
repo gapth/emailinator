@@ -3,12 +3,27 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/task.dart';
 
 class AppState extends ChangeNotifier {
+  /// Helper method to check if database operations should be performed
+  bool get _shouldPerformDatabaseOperations {
+    try {
+      // Try to access Supabase instance and check if user is authenticated
+      final client = Supabase.instance.client;
+      return client.auth.currentUser != null;
+    } catch (e) {
+      // If Supabase is not initialized (e.g., in tests), return false
+      return false;
+    }
+  }
+
   List<Task> _overdueTasks = [];
   List<Task> _upcomingTasks = [];
-  List<Task> _historyTasks = [];
+  List<Task> _completedTasks = [];
+  List<Task> _dismissedTasks = [];
   bool _isLoading = false;
   DateTimeRange? _dateRange;
-  bool _showHistory = false;
+  bool _resolvedShowCompleted = true;
+  int _resolvedDays = 60;
+  bool _resolvedShowDismissed = false;
   List<String> _parentRequirementLevels = [];
   int _dateStartOffsetDays = -7;
   int _dateEndOffsetDays = 30;
@@ -18,9 +33,12 @@ class AppState extends ChangeNotifier {
   List<Task> get tasks => [..._overdueTasks, ..._upcomingTasks];
   List<Task> get overdueTasks => _overdueTasks;
   List<Task> get upcomingTasks => _upcomingTasks;
-  List<Task> get historyTasks => _historyTasks;
+  List<Task> get completedTasks => _completedTasks;
+  List<Task> get dismissedTasks => _dismissedTasks;
   bool get isLoading => _isLoading;
-  bool get showHistory => _showHistory;
+  bool get resolvedShowCompleted => _resolvedShowCompleted;
+  int get resolvedDays => _resolvedDays;
+  bool get resolvedShowDismissed => _resolvedShowDismissed;
   DateTimeRange? get dateRange => _dateRange;
   List<String> getParentRequirementLevels() =>
       List<String>.from(_parentRequirementLevels);
@@ -57,13 +75,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setShowHistory(bool showHistory) {
-    _showHistory = showHistory;
+  void setOverdueGraceDays(int days) {
+    _overdueGraceDays = days;
     notifyListeners();
   }
 
-  void setOverdueGraceDays(int days) {
-    _overdueGraceDays = days;
+  void setResolvedShowCompleted(bool show) {
+    _resolvedShowCompleted = show;
+    notifyListeners();
+  }
+
+  void setResolvedDays(int days) {
+    _resolvedDays = days;
+    notifyListeners();
+  }
+
+  void setResolvedShowDismissed(bool show) {
+    _resolvedShowDismissed = show;
     notifyListeners();
   }
 
@@ -82,33 +110,39 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
       // First, get user preferences
       final prefs = await Supabase.instance.client
           .from('preferences')
           .select(
-              'parent_requirement_levels, show_history, date_start_offset_days, date_end_offset_days, overdue_grace_days')
+              'parent_requirement_levels, date_start_offset_days, date_end_offset_days, overdue_grace_days, resolved_show_completed, resolved_days, resolved_show_dismissed')
           .eq('user_id', userId)
           .maybeSingle();
 
       if (prefs != null) {
         _parentRequirementLevels =
             List<String>.from(prefs['parent_requirement_levels'] ?? []);
-        _showHistory = prefs['show_history'] ?? false;
         _dateStartOffsetDays = prefs['date_start_offset_days'] ?? -7;
         _dateEndOffsetDays = prefs['date_end_offset_days'] ?? 30;
         _overdueGraceDays = prefs['overdue_grace_days'] ?? 14;
+        _resolvedShowCompleted = prefs['resolved_show_completed'] ?? true;
+        _resolvedDays = prefs['resolved_days'] ?? 60;
+        _resolvedShowDismissed = prefs['resolved_show_dismissed'] ?? false;
       }
 
       // Fetch all sections in parallel
       await Future.wait([
         _fetchOverdueTasks(),
         _fetchUpcomingTasks(),
-        if (_showHistory) _fetchHistoryTasks(),
+        if (_resolvedShowCompleted || _resolvedShowDismissed)
+          _fetchResolvedTasks(),
       ]);
 
-      if (!_showHistory) {
-        _historyTasks = [];
+      if (!(_resolvedShowCompleted || _resolvedShowDismissed)) {
+        _completedTasks = [];
+        _dismissedTasks = [];
       }
     } catch (e) {
       // Handle error - could use logging package or debugPrint in development
@@ -196,39 +230,81 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> _fetchHistoryTasks() async {
+  Future<void> _fetchResolvedTasks() async {
     try {
       final now = DateTime.now();
-      final historyThreshold = now.subtract(const Duration(days: 60));
 
-      var historyQuery = Supabase.instance.client
-          .from('user_tasks')
-          .select()
-          .or(
-              'state.eq.COMPLETED,state.eq.DISMISSED,and(state.eq.SNOOZED,snoozed_until.gt.${DateTime.now().toIso8601String()})')
-          .gte('updated_at',
-              historyThreshold.toIso8601String()); // Only last 60 days
+      // Fetch completed tasks if enabled
+      if (_resolvedShowCompleted) {
+        var completedQuery = Supabase.instance.client
+            .from('user_tasks')
+            .select()
+            .eq('state', 'COMPLETED');
 
-      if (_parentRequirementLevels.isNotEmpty) {
-        historyQuery = historyQuery.inFilter(
-            'parent_requirement_level', _parentRequirementLevels);
+        // Only add date filter if not "All" (represented by -1)
+        if (_resolvedDays != -1) {
+          final completedThreshold =
+              now.subtract(Duration(days: _resolvedDays));
+          completedQuery = completedQuery.gte(
+              'completed_at', completedThreshold.toIso8601String());
+        }
+
+        if (_parentRequirementLevels.isNotEmpty) {
+          completedQuery = completedQuery.inFilter(
+              'parent_requirement_level', _parentRequirementLevels);
+        }
+
+        final completedResponse =
+            await completedQuery.order('completed_at', ascending: false);
+
+        _completedTasks = (completedResponse as List)
+            .map((item) => Task.fromJson(item))
+            .toList();
+      } else {
+        _completedTasks = [];
       }
 
-      final historyResponse = await historyQuery
-          .order('completed_at', ascending: false)
-          .order('dismissed_at', ascending: false);
+      // Fetch dismissed tasks if enabled
+      if (_resolvedShowDismissed) {
+        var dismissedQuery = Supabase.instance.client
+            .from('user_tasks')
+            .select()
+            .eq('state', 'DISMISSED');
 
-      _historyTasks =
-          (historyResponse as List).map((item) => Task.fromJson(item)).toList();
+        // Only add date filter if not "All" (represented by -1)
+        if (_resolvedDays != -1) {
+          final dismissedThreshold =
+              now.subtract(Duration(days: _resolvedDays));
+          dismissedQuery = dismissedQuery.gte(
+              'dismissed_at', dismissedThreshold.toIso8601String());
+        }
+
+        if (_parentRequirementLevels.isNotEmpty) {
+          dismissedQuery = dismissedQuery.inFilter(
+              'parent_requirement_level', _parentRequirementLevels);
+        }
+
+        final dismissedResponse =
+            await dismissedQuery.order('dismissed_at', ascending: false);
+
+        _dismissedTasks = (dismissedResponse as List)
+            .map((item) => Task.fromJson(item))
+            .toList();
+      } else {
+        _dismissedTasks = [];
+      }
     } catch (e) {
-      debugPrint('Error fetching history tasks: $e');
-      _historyTasks = [];
+      debugPrint('Error fetching resolved tasks: $e');
+      _completedTasks = [];
+      _dismissedTasks = [];
     }
   }
 
   void removeTask(String taskId) {
     _overdueTasks.removeWhere((task) => task.id == taskId);
     _upcomingTasks.removeWhere((task) => task.id == taskId);
+    _completedTasks.removeWhere((task) => task.id == taskId);
+    _dismissedTasks.removeWhere((task) => task.id == taskId);
     notifyListeners();
   }
 
@@ -236,21 +312,29 @@ class AppState extends ChangeNotifier {
     // Remove from all lists first to avoid duplicates
     removeTask(task.id);
 
-    // Add to appropriate list based on task date
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final effectiveDueDate = task.dueDate ?? task.createdAt;
-    final taskDay = DateTime(
-        effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
-
-    if (taskDay.isBefore(today)) {
-      // Check if within grace period for overdue
-      final graceThreshold = today.subtract(Duration(days: _overdueGraceDays));
-      if (!taskDay.isBefore(graceThreshold)) {
-        _overdueTasks.add(task);
-      }
+    // Add to appropriate list based on task state and date
+    if (task.state == 'COMPLETED') {
+      _completedTasks.add(task);
+    } else if (task.state == 'DISMISSED') {
+      _dismissedTasks.add(task);
     } else {
-      _upcomingTasks.add(task);
+      // For OPEN or SNOOZED tasks, add based on date
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final effectiveDueDate = task.dueDate ?? task.createdAt;
+      final taskDay = DateTime(
+          effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
+
+      if (taskDay.isBefore(today)) {
+        // Check if within grace period for overdue
+        final graceThreshold =
+            today.subtract(Duration(days: _overdueGraceDays));
+        if (!taskDay.isBefore(graceThreshold)) {
+          _overdueTasks.add(task);
+        }
+      } else {
+        _upcomingTasks.add(task);
+      }
     }
 
     notifyListeners();
@@ -268,27 +352,20 @@ class AppState extends ChangeNotifier {
     addTask(task);
   }
 
-  Future<void> saveHistoryPreference() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      await Supabase.instance.client.from('preferences').upsert({
-        'user_id': userId,
-        'show_history': _showHistory,
-      });
-    } catch (e) {
-      debugPrint('Error saving history preference: $e');
-    }
-  }
-
   void setParentRequirementLevels(List<String> levels) {
     _parentRequirementLevels = List<String>.from(levels);
     notifyListeners();
   }
 
   Future<void> saveParentRequirementLevels() async {
+    if (!_shouldPerformDatabaseOperations) return;
+
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      await Supabase.instance.client.from('preferences').upsert({
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await client.from('preferences').upsert({
         'user_id': userId,
         'parent_requirement_levels': _parentRequirementLevels,
       });
@@ -298,9 +375,14 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _saveDateOffsetPreferences() async {
+    if (!_shouldPerformDatabaseOperations) return;
+
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      await Supabase.instance.client.from('preferences').upsert({
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await client.from('preferences').upsert({
         'user_id': userId,
         'date_start_offset_days': _dateStartOffsetDays,
         'date_end_offset_days': _dateEndOffsetDays,
@@ -311,14 +393,38 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> saveOverdueGraceDays() async {
+    if (!_shouldPerformDatabaseOperations) return;
+
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      await Supabase.instance.client.from('preferences').upsert({
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await client.from('preferences').upsert({
         'user_id': userId,
         'overdue_grace_days': _overdueGraceDays,
       });
     } catch (e) {
       debugPrint('Error saving overdue grace days: $e');
+    }
+  }
+
+  Future<void> saveResolvedPreferences() async {
+    if (!_shouldPerformDatabaseOperations) return;
+
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await client.from('preferences').upsert({
+        'user_id': userId,
+        'resolved_show_completed': _resolvedShowCompleted,
+        'resolved_days': _resolvedDays,
+        'resolved_show_dismissed': _resolvedShowDismissed,
+      });
+    } catch (e) {
+      debugPrint('Error saving resolved preferences: $e');
     }
   }
 }

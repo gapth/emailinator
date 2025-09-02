@@ -5,8 +5,8 @@ import 'package:emailinator_flutter/models/app_state.dart';
 import 'package:emailinator_flutter/widgets/filter_bar.dart';
 
 void main() {
-  group('History Filter Toggle Tests', () {
-    testWidgets('FilterBar displays History toggle chip',
+  group('Resolved Filter Toggle Tests', () {
+    testWidgets('FilterBar displays Resolved toggle chip',
         (WidgetTester tester) async {
       final appState = AppState();
 
@@ -21,17 +21,19 @@ void main() {
         ),
       );
 
-      // Should show History chip
-      expect(find.text('History'), findsOneWidget);
-      expect(find.byIcon(Icons.history), findsOneWidget);
+      // Should show Resolved chip
+      expect(find.textContaining('Resolved'), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
     });
 
-    testWidgets('History toggle changes state when tapped',
+    testWidgets('Resolved toggle changes state when tapped',
         (WidgetTester tester) async {
       final appState = AppState();
 
-      // Initially should be false
-      expect(appState.showHistory, false);
+      // Initially resolved settings should match defaults
+      expect(appState.resolvedShowCompleted, true);
+      expect(appState.resolvedShowDismissed, false);
+      expect(appState.resolvedDays, 60);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -44,22 +46,22 @@ void main() {
         ),
       );
 
-      // Find the History chip
-      final historyChip = find.ancestor(
-        of: find.text('History'),
-        matching: find.byType(FilterChip),
+      // Find the Resolved chip
+      final resolvedChip = find.ancestor(
+        of: find.textContaining('Resolved'),
+        matching: find.byType(ActionChip),
       );
-      expect(historyChip, findsOneWidget);
+      expect(resolvedChip, findsOneWidget);
 
-      // Tap the History chip
-      await tester.tap(historyChip);
-      await tester.pump();
+      // Tap the Resolved chip to open bottom sheet
+      await tester.tap(resolvedChip);
+      await tester.pumpAndSettle();
 
-      // State should now be true
-      expect(appState.showHistory, true);
+      // Check that the bottom sheet appears
+      expect(find.text('Resolved Settings'), findsOneWidget);
     });
 
-    testWidgets('FilterBar shows correct number of chips including History',
+    testWidgets('FilterBar shows correct number of chips including Resolved',
         (WidgetTester tester) async {
       final appState = AppState();
 
@@ -74,10 +76,9 @@ void main() {
         ),
       );
 
-      // Should have at least 2 chips: Requirements and History
+      // Should have at least 3 chips: Overdue, Requirements, and Resolved
       expect(find.byType(ActionChip),
-          findsAtLeastNWidgets(1)); // Requirements chip
-      expect(find.byType(FilterChip), findsOneWidget); // History chip
+          findsAtLeastNWidgets(3)); // Overdue, Requirements, Resolved chips
     });
   });
 }

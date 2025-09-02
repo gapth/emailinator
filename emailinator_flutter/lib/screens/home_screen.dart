@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:emailinator_flutter/models/app_state.dart';
 import 'package:emailinator_flutter/widgets/task_list_item.dart';
-import 'package:emailinator_flutter/widgets/history_task_list_item.dart';
+import 'package:emailinator_flutter/widgets/resolved_task_list_item.dart';
 import 'package:emailinator_flutter/widgets/filter_bar.dart';
 import 'package:emailinator_flutter/screens/settings_screen.dart';
 
@@ -145,13 +145,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             .map((task) => TaskListItem(task: task)),
                       ],
 
-                      // History section
-                      if (appState.showHistory &&
-                          appState.historyTasks.isNotEmpty) ...[
+                      // Resolved section (formerly History)
+                      if ((appState.resolvedShowCompleted ||
+                              appState.resolvedShowDismissed) &&
+                          (appState.completedTasks.isNotEmpty ||
+                              appState.dismissedTasks.isNotEmpty)) ...[
                         Padding(
                           padding: const EdgeInsets.all(16.0),
                           child: Text(
-                            'History',
+                            'Resolved',
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge
@@ -161,8 +163,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                           ),
                         ),
-                        ...appState.historyTasks
-                            .map((task) => HistoryTaskListItem(task: task)),
+
+                        // Completed group
+                        if (appState.resolvedShowCompleted &&
+                            appState.completedTasks.isNotEmpty) ...[
+                          ExpansionTile(
+                            title: Text(
+                                'Completed (${appState.completedTasks.length})'),
+                            initiallyExpanded: true,
+                            children: appState.completedTasks
+                                .map((task) => ResolvedTaskListItem(task: task))
+                                .toList(),
+                          ),
+                        ],
+
+                        // Dismissed group
+                        if (appState.resolvedShowDismissed &&
+                            appState.dismissedTasks.isNotEmpty) ...[
+                          ExpansionTile(
+                            title: Text(
+                                'Dismissed (${appState.dismissedTasks.length})'),
+                            initiallyExpanded: true,
+                            children: appState.dismissedTasks
+                                .map((task) => ResolvedTaskListItem(task: task))
+                                .toList(),
+                          ),
+                        ],
                       ],
                     ],
                   ),

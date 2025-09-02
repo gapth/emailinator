@@ -50,6 +50,30 @@ class FilterBar extends StatelessWidget {
     return friendlyNames.join(', ');
   }
 
+  String _formatResolvedChip(AppState appState) {
+    final showCompleted = appState.resolvedShowCompleted;
+    final showDismissed = appState.resolvedShowDismissed;
+
+    if (!showCompleted && !showDismissed) {
+      return 'Resolved: Off';
+    }
+
+    final resolvedDays = appState.resolvedDays;
+
+    if (showCompleted && showDismissed) {
+      final daysText = resolvedDays == -1 ? 'All' : '${resolvedDays}d';
+      return 'Resolved: Done ✓ + Dismissed × $daysText';
+    } else if (showCompleted) {
+      final daysText = resolvedDays == -1 ? 'All' : '${resolvedDays}d';
+      return 'Resolved: Done ✓ $daysText';
+    } else if (showDismissed) {
+      final daysText = resolvedDays == -1 ? 'All' : '${resolvedDays}d';
+      return 'Resolved: Dismissed × $daysText';
+    }
+
+    return 'Resolved: Off';
+  }
+
   Future<void> _selectDateRange(BuildContext context) async {
     final appState = Provider.of<AppState>(context, listen: false);
     final initialDateRange =
@@ -131,11 +155,142 @@ class FilterBar extends StatelessWidget {
     onFiltersChanged?.call();
   }
 
-  Future<void> _toggleHistory(BuildContext context) async {
+  Future<void> _showResolvedBottomSheet(BuildContext context) async {
     final appState = Provider.of<AppState>(context, listen: false);
-    appState.setShowHistory(!appState.showHistory);
-    await appState.saveHistoryPreference();
+    bool showCompleted = appState.resolvedShowCompleted;
+    bool showDismissed = appState.resolvedShowDismissed;
+    int resolvedDays = appState.resolvedDays;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Resolved Settings',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Show Completed toggle
+                  CheckboxListTile(
+                    title: const Text('Show Completed'),
+                    value: showCompleted,
+                    onChanged: (bool? value) {
+                      setModalState(() {
+                        showCompleted = value ?? false;
+                      });
+                    },
+                  ),
+
+                  // Show Dismissed toggle
+                  CheckboxListTile(
+                    title: const Text('Show Dismissed'),
+                    value: showDismissed,
+                    onChanged: (bool? value) {
+                      setModalState(() {
+                        showDismissed = value ?? false;
+                      });
+                    },
+                  ),
+
+                  // Days range selector (applies to both completed and dismissed)
+                  if (showCompleted || showDismissed) ...[
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(
+                          left: 16.0, right: 16.0, bottom: 8.0),
+                      child: Text(
+                        'Range: ${resolvedDays == -1 ? 'All' : '${resolvedDays}d'}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Row(
+                        children: [
+                          _buildDayChip(context, 30, resolvedDays == 30,
+                              (selected) {
+                            if (selected) {
+                              setModalState(() => resolvedDays = 30);
+                            }
+                          }),
+                          const SizedBox(width: 8),
+                          _buildDayChip(context, 60, resolvedDays == 60,
+                              (selected) {
+                            if (selected) {
+                              setModalState(() => resolvedDays = 60);
+                            }
+                          }),
+                          const SizedBox(width: 8),
+                          _buildDayChip(context, 90, resolvedDays == 90,
+                              (selected) {
+                            if (selected) {
+                              setModalState(() => resolvedDays = 90);
+                            }
+                          }),
+                          const SizedBox(width: 8),
+                          _buildDayChip(context, -1, resolvedDays == -1,
+                              (selected) {
+                            if (selected) {
+                              setModalState(() => resolvedDays = -1);
+                            }
+                          }, label: 'All'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // Update the app state and save the changes
+    appState.setResolvedShowCompleted(showCompleted);
+    appState.setResolvedDays(resolvedDays);
+    appState.setResolvedShowDismissed(showDismissed);
+
+    await appState.saveResolvedPreferences();
+    await appState.fetchTasks(); // Refresh tasks with new filter
     onFiltersChanged?.call();
+  }
+
+  Widget _buildDayChip(BuildContext context, int days, bool isSelected,
+      ValueChanged<bool> onSelected,
+      {String? label}) {
+    return FilterChip(
+      label: Text(label ?? '${days}d'),
+      selected: isSelected,
+      onSelected: onSelected,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+      labelStyle: TextStyle(
+        color: isSelected
+            ? Theme.of(context).colorScheme.onPrimaryContainer
+            : Theme.of(context).colorScheme.onSurface,
+        fontSize: 12,
+      ),
+    );
   }
 
   Future<void> _showOverdueBottomSheet(BuildContext context) async {
@@ -248,22 +403,23 @@ class FilterBar extends StatelessWidget {
           ),
         );
 
-        // History toggle chip
+        // Resolved chip (renamed from History)
         chips.add(
-          FilterChip(
-            label: const Text('History'),
-            avatar: const Icon(Icons.history, size: 16),
-            selected: appState.showHistory,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            selectedColor: Theme.of(context).colorScheme.tertiaryContainer,
-            checkmarkColor: Theme.of(context).colorScheme.onTertiaryContainer,
+          ActionChip(
+            label: Text(_formatResolvedChip(appState)),
+            avatar: const Icon(Icons.check_circle_outline, size: 16),
+            backgroundColor: (appState.resolvedShowCompleted ||
+                    appState.resolvedShowDismissed)
+                ? Theme.of(context).colorScheme.tertiaryContainer
+                : Theme.of(context).colorScheme.surface,
             labelStyle: TextStyle(
-              color: appState.showHistory
+              color: (appState.resolvedShowCompleted ||
+                      appState.resolvedShowDismissed)
                   ? Theme.of(context).colorScheme.onTertiaryContainer
                   : Theme.of(context).colorScheme.onSurface,
               fontSize: 12,
             ),
-            onSelected: (selected) => _toggleHistory(context),
+            onPressed: () => _showResolvedBottomSheet(context),
           ),
         );
 

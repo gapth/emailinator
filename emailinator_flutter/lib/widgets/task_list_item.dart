@@ -87,6 +87,35 @@ class _TaskListItemState extends State<TaskListItem> {
       await Supabase.instance.client
           .from('user_task_states')
           .upsert(updateData, onConflict: 'user_id, task_id');
+
+      // Update the local task object and move it to the appropriate list
+      if (newState == 'COMPLETED' || newState == 'DISMISSED') {
+        // Create an updated task object with the new state and timestamps
+        final updatedTask = Task(
+          id: task.id,
+          userId: task.userId,
+          emailId: task.emailId,
+          title: task.title,
+          description: task.description,
+          dueDate: task.dueDate,
+          consequenceIfIgnore: task.consequenceIfIgnore,
+          parentAction: task.parentAction,
+          parentRequirementLevel: task.parentRequirementLevel,
+          studentAction: task.studentAction,
+          studentRequirementLevel: task.studentRequirementLevel,
+          createdAt: task.createdAt,
+          updatedAt: DateTime.now(),
+          state: newState,
+          completedAt:
+              newState == 'COMPLETED' ? DateTime.now() : task.completedAt,
+          dismissedAt:
+              newState == 'DISMISSED' ? DateTime.now() : task.dismissedAt,
+          snoozedUntil: task.snoozedUntil,
+        );
+
+        // Add the updated task to the appropriate resolved list
+        appState.addTask(updatedTask);
+      }
     } catch (e) {
       // Rollback on failure
       if (!undoRequested) {
