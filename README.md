@@ -1,20 +1,25 @@
 # Emailinator
 
-![Tests](https://github.com/gapthirathon/emailinator/workflows/Run%20Tests/badge.svg)
+![Tests](https://github.com/gapthirathon/emailinator/workflows/Test%20and%20Deploy/badge.svg)
 
-Emailinator helps parents manage school emails—and eventually other communications—by focusing on the tasks they need to handle. Users forward messages to the system, which extracts actionable tasks and lets each family decide how involved the assistant should be.
+Emailinator helps parents manage school emails—and eventually other
+communications—by focusing on the tasks they need to handle. Users forward
+messages to the system, which extracts actionable tasks and lets each family
+decide how involved the assistant should be.
 
 ## High-level architecture
 
 - **Supabase** provides the database, server logic, and authentication.
 - **OpenAI** performs task extraction.
-- **Cloudflare** DNS to point `in.emailinator.app` to **Postmark**, which forwards messages to a **Supabase** webhook for processing.
+- **Cloudflare** DNS to point `in.emailinator.app` to **Postmark**, which
+  forwards messages to a **Supabase** webhook for processing.
 - **Flutter** powers the web, Android, and iOS apps.
 - **Cloudflare** hosts the web experience.
 
 ## Flutter App
 
-For detailed information about running and developing the Flutter application, see the [Flutter README](emailinator_flutter/README.md).
+For detailed information about running and developing the Flutter application,
+see the [Flutter README](emailinator_flutter/README.md).
 
 ## Development
 
@@ -58,18 +63,21 @@ Deploy the function and schedule it to run periodically using Supabase Cron:
 supabase functions deploy reprocess-unprocessed
 ```
 
-Schedule the reprocess-unprocessed Edge Function to recur on the Supabase dashboard > Integrations > Cron
+Schedule the reprocess-unprocessed Edge Function to recur on the Supabase
+dashboard > Integrations > Cron
 
 To test locally:
 
 ```bash
 curl -i -X POST "$SUPABASE_URL/functions/v1/reprocess-unprocessed" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"  
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
 ```
 
 ### Depositing monthly OpenAI budget
 
-Deploy the `deposit-budget` Edge Function and schedule it to run regularly (e.g. monthly) with Supabase Cron. Each run deposits a fixed amount of OpenAI API budget into the specified user's account.
+Deploy the `deposit-budget` Edge Function and schedule it to run regularly (e.g.
+monthly) with Supabase Cron. Each run deposits a fixed amount of OpenAI API
+budget into the specified user's account.
 
 Set the deposit amount via the `BUDGET_DEPOSIT_NANO_USD` environment variable.
 
@@ -77,7 +85,8 @@ Set the deposit amount via the `BUDGET_DEPOSIT_NANO_USD` environment variable.
 supabase functions deploy deposit-budget
 ```
 
-Then schedule the function from the Supabase dashboard and invoke it with the service role key.
+Then schedule the function from the Supabase dashboard and invoke it with the
+service role key.
 
 To test locally:
 
