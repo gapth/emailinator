@@ -58,8 +58,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           const SnackBar(
               content: Text('Password changed. Please sign in again.')),
         );
-        Navigator.of(context)
-            .pushNamedAndRemoveUntil('/login', (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } on AuthException catch (e) {
       if (mounted) {

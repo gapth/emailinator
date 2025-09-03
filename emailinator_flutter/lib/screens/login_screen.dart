@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
           password: _passwordController.text.trim(),
         );
         if (response.user != null && mounted) {
-          Navigator.of(context).pushReplacementNamed('/home');
+          Navigator.of(context).pushReplacementNamed('/');
         }
       } on AuthException catch (e) {
         if (mounted) {

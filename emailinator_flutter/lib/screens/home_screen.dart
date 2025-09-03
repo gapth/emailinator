@@ -35,9 +35,40 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _signOut() async {
-    await Supabase.instance.client.auth.signOut();
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/login');
+    final bool? shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Sign Out'),
+          content: const Text('Are you sure you want to sign out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sign Out'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSignOut == true) {
+      try {
+        await Supabase.instance.client.auth.signOut(scope: SignOutScope.global);
+        if (mounted) {
+          // Navigate to root and clear all previous routes
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Sign out failed: $e')),
+          );
+        }
+      }
     }
   }
 

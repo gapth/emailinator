@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 import 'package:emailinator_flutter/screens/login_screen.dart';
 import 'package:emailinator_flutter/screens/home_screen.dart';
@@ -58,17 +59,27 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  StreamSubscription<AuthState>? _authSubscription;
+
   @override
   void initState() {
     super.initState();
-    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
-      if (event == AuthChangeEvent.signedIn ||
-          event == AuthChangeEvent.signedOut) {
+      if (mounted &&
+          (event == AuthChangeEvent.signedIn ||
+              event == AuthChangeEvent.signedOut)) {
         // This will cause the widget to rebuild and show the correct screen.
         setState(() {});
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   @override
