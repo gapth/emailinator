@@ -108,13 +108,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       // Overdue section - always shown at the top
                       Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'Overdue',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: Colors.red.shade700,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Overdue',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
                                     color: Colors.red.shade700,
                                     fontWeight: FontWeight.bold,
                                   ),
+                            ),
+                          ],
                         ),
                       ),
                       if (overdueTasks.isNotEmpty)
@@ -134,12 +146,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       // Upcoming section - always shown
                       Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'Upcoming',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_month,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Upcoming',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
+                            ),
+                          ],
                         ),
                       ),
                       if (upcomingTasks.isNotEmpty)
@@ -161,23 +185,43 @@ class _HomeScreenState extends State<HomeScreen> {
                           appState.resolvedShowDismissed) ...[
                         Padding(
                           padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                            'Resolved',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey[700],
-                                ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.done_all,
+                                color: Colors.grey[700],
+                                size: 24,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Resolved',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[700],
+                                    ),
+                              ),
+                            ],
                           ),
                         ),
 
                         // Completed group - always shown if filter allows
                         if (appState.resolvedShowCompleted) ...[
                           ExpansionTile(
-                            title: Text(
-                                'Completed (${appState.completedTasks.length})'),
+                            title: Row(
+                              children: [
+                                const Icon(
+                                  Icons.check,
+                                  color: Colors.green,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                    'Completed (${appState.completedTasks.length})'),
+                              ],
+                            ),
                             initiallyExpanded: true,
                             children: appState.completedTasks.isNotEmpty
                                 ? appState.completedTasks
@@ -202,8 +246,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         // Dismissed group - always shown if filter allows
                         if (appState.resolvedShowDismissed) ...[
                           ExpansionTile(
-                            title: Text(
-                                'Dismissed (${appState.dismissedTasks.length})'),
+                            title: Row(
+                              children: [
+                                const Icon(
+                                  Icons.close,
+                                  color: Colors.red,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                    'Dismissed (${appState.dismissedTasks.length})'),
+                              ],
+                            ),
                             initiallyExpanded: true,
                             children: appState.dismissedTasks.isNotEmpty
                                 ? appState.dismissedTasks

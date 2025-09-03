@@ -21,9 +21,9 @@ void main() {
         ),
       );
 
-      // Should show Resolved chip
-      expect(find.textContaining('Resolved'), findsOneWidget);
-      expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+      // Should show Resolved chip with done_all icon and "None" text when no resolved tasks
+      expect(find.text('None'), findsOneWidget);
+      expect(find.byIcon(Icons.done_all), findsOneWidget);
     });
 
     testWidgets('Resolved toggle changes state when tapped',
@@ -46,9 +46,9 @@ void main() {
         ),
       );
 
-      // Find the Resolved chip
+      // Find the Resolved chip by its icon
       final resolvedChip = find.ancestor(
-        of: find.textContaining('Resolved'),
+        of: find.byIcon(Icons.done_all),
         matching: find.byType(ActionChip),
       );
       expect(resolvedChip, findsOneWidget);
@@ -76,9 +76,8 @@ void main() {
         ),
       );
 
-      // Should have at least 3 chips: Overdue, Requirements, and Resolved
-      expect(find.byType(ActionChip),
-          findsAtLeastNWidgets(3)); // Overdue, Requirements, Resolved chips
+      // Should have exactly 4 chips: Overdue, Upcoming, Resolved, Requirements
+      expect(find.byType(ActionChip), findsNWidgets(4));
     });
   });
 }

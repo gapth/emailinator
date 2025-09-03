@@ -8,70 +8,54 @@ class FilterBar extends StatelessWidget {
 
   const FilterBar({super.key, this.onFiltersChanged});
 
-  String _formatDateRange(DateTimeRange dateRange) {
-    final DateFormat formatter = DateFormat('MMM d');
-    final start = formatter.format(dateRange.start);
-    final end = formatter.format(dateRange.end);
-
-    // If same year, don't repeat it
-    if (dateRange.start.year == dateRange.end.year) {
-      return '$start – $end';
-    } else {
-      return '${formatter.format(dateRange.start)} ${dateRange.start.year} – ${formatter.format(dateRange.end)} ${dateRange.end.year}';
-    }
-  }
-
   String _formatRequirementLevels(List<String> levels) {
     final allLevels = ['NONE', 'OPTIONAL', 'VOLUNTEER', 'MANDATORY'];
 
     if (levels.isEmpty || levels.length == allLevels.length) {
-      return 'All Requirements';
+      return 'All';
     }
 
-    // Convert to user-friendly names and sort for consistency
-    final friendlyNames = levels.map((level) {
-      switch (level) {
-        case 'MANDATORY':
-          return 'Mandatory';
-        case 'OPTIONAL':
-          return 'Optional';
-        case 'VOLUNTEER':
-          return 'Volunteer';
-        case 'NONE':
-          return 'None';
-        default:
-          return level;
-      }
-    }).toList();
+    // Convert to single letter codes
+    final codes = <String>[];
+    if (levels.contains('MANDATORY')) codes.add('M');
+    if (levels.contains('OPTIONAL')) codes.add('O');
+    if (levels.contains('VOLUNTEER')) codes.add('V');
+    if (levels.contains('NONE')) codes.add('N');
 
-    // Sort to ensure consistent display order
-    friendlyNames.sort();
+    return codes.join(' ');
+  }
 
-    return friendlyNames.join(', ');
+  String _formatCountWithCap(int count) {
+    return count > 99 ? '99+' : count.toString();
+  }
+
+  String _formatNumberWithSign(num number) {
+    final formatter =
+        NumberFormat("+#;-#"); // Pattern for positive and negative numbers
+    return formatter.format(number);
   }
 
   String _formatResolvedChip(AppState appState) {
     final showCompleted = appState.resolvedShowCompleted;
     final showDismissed = appState.resolvedShowDismissed;
+    final completedCount = appState.completedTasks.length;
+    final dismissedCount = appState.dismissedTasks.length;
 
-    if (!showCompleted && !showDismissed) {
-      return 'Resolved: Off';
+    final parts = <String>[];
+
+    if (showCompleted && completedCount > 0) {
+      parts.add('✓${_formatCountWithCap(completedCount)}');
     }
 
-    final resolvedDays = appState.resolvedDays;
-
-    if (showCompleted && showDismissed) {
-      final daysText = resolvedDays == -1 ? 'All' : '${resolvedDays}d';
-      return 'Resolved: Done ✓ + Dismissed × $daysText';
-    } else if (showCompleted) {
-      final daysText = resolvedDays == -1 ? 'All' : '${resolvedDays}d';
-      return 'Resolved: Done ✓ $daysText';
-    } else if (showDismissed) {
-      final daysText = resolvedDays == -1 ? 'All' : '${resolvedDays}d';
-      return 'Resolved: Dismissed × $daysText';
+    if (showDismissed && dismissedCount > 0) {
+      parts.add('×${_formatCountWithCap(dismissedCount)}');
     }
 
-    return 'Resolved: Off';
+    if (parts.isEmpty) {
+      return 'None';
+    }
+
+    return parts.join(' ');
   }
 
   Future<void> _selectDateRange(BuildContext context) async {
@@ -153,6 +137,56 @@ class FilterBar extends StatelessWidget {
     await appState.saveParentRequirementLevels();
     await appState.fetchTasks(); // Refresh tasks with new filter
     onFiltersChanged?.call();
+  }
+
+  String _getOverdueTooltip(AppState appState) {
+    return 'last ${appState.overdueGraceDays} days';
+  }
+
+  String _getUpcomingTooltip(AppState appState) {
+    final dateRange = appState.dateRange ?? appState.getDefaultDateRange();
+    final DateFormat formatter = DateFormat('MMM d');
+    final start = formatter.format(dateRange.start);
+    final end = formatter.format(dateRange.end);
+    return '$start - $end';
+  }
+
+  String _getResolvedTooltip(AppState appState) {
+    final showCompleted = appState.resolvedShowCompleted;
+    final showDismissed = appState.resolvedShowDismissed;
+
+    final parts = <String>[];
+    if (showCompleted) parts.add('✓ Completed');
+    if (showDismissed) parts.add('× Dismissed');
+
+    if (parts.isEmpty) return 'None shown';
+    return parts.join(', ');
+  }
+
+  String _getRequirementTooltip(AppState appState) {
+    final levels = appState.getParentRequirementLevels();
+    final allLevels = ['NONE', 'OPTIONAL', 'VOLUNTEER', 'MANDATORY'];
+
+    if (levels.isEmpty || levels.length == allLevels.length) {
+      return 'All requirement levels';
+    }
+
+    final friendlyNames = levels.map((level) {
+      switch (level) {
+        case 'MANDATORY':
+          return 'Mandatory';
+        case 'OPTIONAL':
+          return 'Optional';
+        case 'VOLUNTEER':
+          return 'Volunteer';
+        case 'NONE':
+          return 'None';
+        default:
+          return level;
+      }
+    }).toList();
+
+    return friendlyNames.join(', ');
   }
 
   Future<void> _showResolvedBottomSheet(BuildContext context) async {
@@ -373,12 +407,33 @@ class FilterBar extends StatelessWidget {
       builder: (context, appState, child) {
         final chips = <Widget>[];
 
-        // Date range chip
-        if (appState.dateRange != null) {
-          chips.add(
-            ActionChip(
-              label: Text(_formatDateRange(appState.dateRange!)),
-              avatar: const Icon(Icons.date_range, size: 16),
+        // 1) Overdue chip - Always shown
+        final overdueCount = appState.overdueTasks.length;
+        chips.add(
+          Tooltip(
+            message: _getOverdueTooltip(appState),
+            child: ActionChip(
+              label: Text(_formatCountWithCap(overdueCount)),
+              avatar: const Icon(Icons.error_outline, size: 16),
+              backgroundColor: Colors.red.shade50,
+              labelStyle: TextStyle(
+                color: Colors.red.shade700,
+                fontSize: 12,
+              ),
+              onPressed: () => _showOverdueBottomSheet(context),
+            ),
+          ),
+        );
+
+        // 2) Upcoming date picker - Always shown
+        final dateText =
+            '${_formatNumberWithSign(appState.dateStartOffsetDays)}→${_formatNumberWithSign(appState.dateEndOffsetDays)}';
+        chips.add(
+          Tooltip(
+            message: _getUpcomingTooltip(appState),
+            child: ActionChip(
+              label: Text(dateText),
+              avatar: const Icon(Icons.calendar_month, size: 16),
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               labelStyle: TextStyle(
                 color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -386,61 +441,51 @@ class FilterBar extends StatelessWidget {
               ),
               onPressed: () => _selectDateRange(context),
             ),
-          );
-        }
-
-        // Overdue chip
-        chips.add(
-          ActionChip(
-            label: Text('Overdue: ${appState.overdueGraceDays}d'),
-            avatar: const Icon(Icons.schedule, size: 16),
-            backgroundColor: Colors.red.shade50,
-            labelStyle: TextStyle(
-              color: Colors.red.shade700,
-              fontSize: 12,
-            ),
-            onPressed: () => _showOverdueBottomSheet(context),
           ),
         );
 
-        // Resolved chip (renamed from History)
+        // 3) Resolved settings - Always shown
+        final resolvedText = _formatResolvedChip(appState);
         chips.add(
-          ActionChip(
-            label: Text(_formatResolvedChip(appState)),
-            avatar: const Icon(Icons.check_circle_outline, size: 16),
-            backgroundColor: (appState.resolvedShowCompleted ||
-                    appState.resolvedShowDismissed)
-                ? Theme.of(context).colorScheme.tertiaryContainer
-                : Theme.of(context).colorScheme.surface,
-            labelStyle: TextStyle(
-              color: (appState.resolvedShowCompleted ||
+          Tooltip(
+            message: _getResolvedTooltip(appState),
+            child: ActionChip(
+              label: Text(resolvedText),
+              avatar: const Icon(Icons.done_all, size: 16),
+              backgroundColor: (appState.resolvedShowCompleted ||
                       appState.resolvedShowDismissed)
-                  ? Theme.of(context).colorScheme.onTertiaryContainer
-                  : Theme.of(context).colorScheme.onSurface,
-              fontSize: 12,
+                  ? Theme.of(context).colorScheme.tertiaryContainer
+                  : Theme.of(context).colorScheme.surface,
+              labelStyle: TextStyle(
+                color: (appState.resolvedShowCompleted ||
+                        appState.resolvedShowDismissed)
+                    ? Theme.of(context).colorScheme.onTertiaryContainer
+                    : Theme.of(context).colorScheme.onSurface,
+                fontSize: 12,
+              ),
+              onPressed: () => _showResolvedBottomSheet(context),
             ),
-            onPressed: () => _showResolvedBottomSheet(context),
           ),
         );
 
-        // Requirement levels chip
+        // 4) Requirement filter - Always shown
+        final requirementText =
+            _formatRequirementLevels(appState.getParentRequirementLevels());
         chips.add(
-          ActionChip(
-            label: Text(_formatRequirementLevels(
-                appState.getParentRequirementLevels())),
-            avatar: const Icon(Icons.assignment, size: 16),
-            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-            labelStyle: TextStyle(
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-              fontSize: 12,
+          Tooltip(
+            message: _getRequirementTooltip(appState),
+            child: ActionChip(
+              label: Text(requirementText),
+              avatar: const Icon(Icons.filter_alt, size: 16),
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+              labelStyle: TextStyle(
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                fontSize: 12,
+              ),
+              onPressed: () => _showParentRequirementBottomSheet(context),
             ),
-            onPressed: () => _showParentRequirementBottomSheet(context),
           ),
         );
-
-        if (chips.isEmpty) {
-          return const SizedBox.shrink();
-        }
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
