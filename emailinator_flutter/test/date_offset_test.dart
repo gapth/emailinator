@@ -1,39 +1,38 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 
 void main() {
-  group('Date Offset Functionality Tests', () {
-    test('getDefaultDateRange uses offset preferences', () {
+  group('Upcoming Days Functionality Tests', () {
+    test('getDefaultDateRange uses upcoming_days preference', () {
       final appState = AppState();
 
-      // Test with default offsets (-7 and 30 days)
+      // Test with default upcoming_days (30 days)
       final defaultRange = appState.getDefaultDateRange();
       final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
 
-      // Check that the default range uses the correct offsets
-      expect(defaultRange.start.day,
-          equals(now.add(const Duration(days: -7)).day));
-      expect(
-          defaultRange.end.day, equals(now.add(const Duration(days: 30)).day));
+      // Check that the default range starts today and ends in 29 days (30 days total including today)
+      expect(defaultRange.start, equals(today));
+      expect(defaultRange.end, equals(today.add(const Duration(days: 29))));
     });
 
-    test('setDateRange calculates and updates offsets approximately', () {
+    test('setUpcomingDays updates the preference', () {
       final appState = AppState();
+
+      // Initially 30 days
+      expect(appState.upcomingDays, equals(30));
+
+      // Change to 14 days
+      appState.setUpcomingDays(14);
+      expect(appState.upcomingDays, equals(14));
+
+      // Test that getDefaultDateRange reflects the new preference
+      final defaultRange = appState.getDefaultDateRange();
       final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
 
-      // Set a custom date range
-      final customRange = DateTimeRange(
-        start: now.add(const Duration(days: -14)), // 2 weeks ago
-        end: now.add(const Duration(days: 60)), // 2 months ahead
-      );
-
-      appState.setDateRange(customRange);
-
-      // Check that offsets were calculated approximately correctly
-      // Allow for ±1 day difference due to potential timing issues
-      expect(appState.dateStartOffsetDays, inInclusiveRange(-15, -13));
-      expect(appState.dateEndOffsetDays, inInclusiveRange(59, 61));
+      expect(defaultRange.start, equals(today));
+      expect(defaultRange.end, equals(today.add(const Duration(days: 13))));
     });
 
     test('setDateRangeToDefault applies calculated default range', () {
@@ -49,10 +48,22 @@ void main() {
       expect(appState.dateRange, isNotNull);
 
       final now = DateTime.now();
-      expect(appState.dateRange!.start.day,
-          equals(now.add(const Duration(days: -7)).day));
-      expect(appState.dateRange!.end.day,
-          equals(now.add(const Duration(days: 30)).day));
+      final today = DateTime(now.year, now.month, now.day);
+      expect(appState.dateRange!.start, equals(today));
+      expect(
+          appState.dateRange!.end, equals(today.add(const Duration(days: 29))));
+    });
+
+    test('upcoming_days=1 means today only', () {
+      final appState = AppState();
+      appState.setUpcomingDays(1);
+
+      final defaultRange = appState.getDefaultDateRange();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      expect(defaultRange.start, equals(today));
+      expect(defaultRange.end, equals(today)); // Same day for 1 day
     });
   });
 }

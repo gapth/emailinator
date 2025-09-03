@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
 
 class FilterBar extends StatelessWidget {
@@ -29,12 +28,6 @@ class FilterBar extends StatelessWidget {
     return count > 99 ? '99+' : count.toString();
   }
 
-  String _formatNumberWithSign(num number) {
-    final formatter =
-        NumberFormat("+#;-#"); // Pattern for positive and negative numbers
-    return formatter.format(number);
-  }
-
   String _formatResolvedChip(AppState appState) {
     final showCompleted = appState.resolvedShowCompleted;
     final showDismissed = appState.resolvedShowDismissed;
@@ -56,24 +49,6 @@ class FilterBar extends StatelessWidget {
     }
 
     return parts.join(' ');
-  }
-
-  Future<void> _selectDateRange(BuildContext context) async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final initialDateRange =
-        appState.dateRange ?? appState.getDefaultDateRange();
-
-    final newDateRange = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(DateTime.now().year - 5),
-      lastDate: DateTime(DateTime.now().year + 5),
-      initialDateRange: initialDateRange,
-    );
-
-    if (newDateRange != null) {
-      appState.setDateRange(newDateRange);
-      onFiltersChanged?.call();
-    }
   }
 
   Future<void> _showParentRequirementBottomSheet(BuildContext context) async {
@@ -144,11 +119,7 @@ class FilterBar extends StatelessWidget {
   }
 
   String _getUpcomingTooltip(AppState appState) {
-    final dateRange = appState.dateRange ?? appState.getDefaultDateRange();
-    final DateFormat formatter = DateFormat('MMM d');
-    final start = formatter.format(dateRange.start);
-    final end = formatter.format(dateRange.end);
-    return '$start - $end';
+    return 'next ${appState.upcomingDays} days';
   }
 
   String _getResolvedTooltip(AppState appState) {
@@ -401,6 +372,81 @@ class FilterBar extends StatelessWidget {
     onFiltersChanged?.call();
   }
 
+  Future<void> _showUpcomingBottomSheet(BuildContext context) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    double selectedDays = appState.upcomingDays.toDouble();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Upcoming days',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Show upcoming tasks in the next ${selectedDays.round()} days',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    '${selectedDays.round()} days',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  Slider(
+                    value: selectedDays,
+                    min: 1,
+                    max: 30,
+                    divisions: 29,
+                    onChanged: (double value) {
+                      setModalState(() {
+                        selectedDays = value;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('1 day',
+                          style: Theme.of(context).textTheme.labelMedium),
+                      Text('30 days',
+                          style: Theme.of(context).textTheme.labelMedium),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // Update the app state and save the changes
+    appState.setUpcomingDays(selectedDays.round());
+    await appState.saveUpcomingDays();
+    await appState.fetchTasks(); // Refresh tasks with new filter
+    onFiltersChanged?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
@@ -425,21 +471,20 @@ class FilterBar extends StatelessWidget {
           ),
         );
 
-        // 2) Upcoming date picker - Always shown
-        final dateText =
-            '${_formatNumberWithSign(appState.dateStartOffsetDays)}→${_formatNumberWithSign(appState.dateEndOffsetDays)}';
+        // 2) Upcoming chip - Always shown with task count
+        final upcomingCount = appState.upcomingTasks.length;
         chips.add(
           Tooltip(
             message: _getUpcomingTooltip(appState),
             child: ActionChip(
-              label: Text(dateText),
+              label: Text(_formatCountWithCap(upcomingCount)),
               avatar: const Icon(Icons.calendar_month, size: 16),
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               labelStyle: TextStyle(
                 color: Theme.of(context).colorScheme.onPrimaryContainer,
                 fontSize: 12,
               ),
-              onPressed: () => _selectDateRange(context),
+              onPressed: () => _showUpcomingBottomSheet(context),
             ),
           ),
         );

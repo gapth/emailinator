@@ -6,7 +6,7 @@ import 'package:emailinator_flutter/widgets/filter_bar.dart';
 
 void main() {
   group('FilterBar Widget Tests', () {
-    testWidgets('FilterBar displays upcoming date picker chip',
+    testWidgets('FilterBar displays upcoming chip with count',
         (WidgetTester tester) async {
       final appState = AppState();
 
@@ -21,9 +21,15 @@ void main() {
         ),
       );
 
-      // Check for the date offset format: startOffset→+endOffset
-      expect(find.textContaining('→+'), findsOneWidget);
+      // Should show upcoming task count (format: "0")
       expect(find.byIcon(Icons.calendar_month), findsOneWidget);
+
+      // Find the upcoming chip specifically by looking for the chip with calendar icon
+      final upcomingChip = find.ancestor(
+        of: find.byIcon(Icons.calendar_month),
+        matching: find.byType(ActionChip),
+      );
+      expect(upcomingChip, findsOneWidget);
     });
 
     testWidgets('FilterBar displays overdue chip with count',
@@ -41,9 +47,15 @@ void main() {
         ),
       );
 
-      // Should show overdue count only (format: "0")
-      expect(find.text('0'), findsOneWidget);
+      // Should show overdue icon
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
+
+      // Find the overdue chip specifically by looking for the chip with error icon
+      final overdueChip = find.ancestor(
+        of: find.byIcon(Icons.error_outline),
+        matching: find.byType(ActionChip),
+      );
+      expect(overdueChip, findsOneWidget);
     });
 
     testWidgets('FilterBar displays requirement levels chip',
@@ -252,8 +264,8 @@ void main() {
         ),
       );
 
-      // With empty state, should show "0" for overdue
-      expect(find.text('0'), findsOneWidget);
+      // With empty state, should show "0" for both overdue and upcoming chips
+      expect(find.text('0'), findsNWidgets(2));
 
       // Verify all 4 chips are present
       expect(find.byType(ActionChip), findsNWidgets(4));

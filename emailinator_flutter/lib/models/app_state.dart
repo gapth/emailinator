@@ -25,8 +25,7 @@ class AppState extends ChangeNotifier {
   int _resolvedDays = 60;
   bool _resolvedShowDismissed = false;
   List<String> _parentRequirementLevels = [];
-  int _dateStartOffsetDays = -7;
-  int _dateEndOffsetDays = 30;
+  int _upcomingDays = 30;
   int _overdueGraceDays = 14;
 
   // Computed property that combines overdue and upcoming tasks for backward compatibility
@@ -42,36 +41,32 @@ class AppState extends ChangeNotifier {
   DateTimeRange? get dateRange => _dateRange;
   List<String> getParentRequirementLevels() =>
       List<String>.from(_parentRequirementLevels);
-  int get dateStartOffsetDays => _dateStartOffsetDays;
-  int get dateEndOffsetDays => _dateEndOffsetDays;
+  int get upcomingDays => _upcomingDays;
   int get overdueGraceDays => _overdueGraceDays;
 
   void setDateRange(DateTimeRange? newDateRange) {
     _dateRange = newDateRange;
-
-    // Calculate and save new offsets when user manually selects a date range
-    if (newDateRange != null) {
-      final now = DateTime.now();
-      _dateStartOffsetDays = newDateRange.start.difference(now).inDays;
-      _dateEndOffsetDays = newDateRange.end.difference(now).inDays;
-      _saveDateOffsetPreferences();
-    }
-
     notifyListeners();
   }
 
-  /// Get the default date range based on current offset preferences
+  /// Get the default date range based on current upcoming_days preference
   DateTimeRange getDefaultDateRange() {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     return DateTimeRange(
-      start: now.add(Duration(days: _dateStartOffsetDays)),
-      end: now.add(Duration(days: _dateEndOffsetDays)),
+      start: today,
+      end: today.add(Duration(days: _upcomingDays - 1)),
     );
   }
 
-  /// Set the date range to the default based on current offset preferences
+  /// Set the date range to the default based on current upcoming_days preference
   void setDateRangeToDefault() {
     _dateRange = getDefaultDateRange();
+    notifyListeners();
+  }
+
+  void setUpcomingDays(int days) {
+    _upcomingDays = days;
     notifyListeners();
   }
 
@@ -117,15 +112,14 @@ class AppState extends ChangeNotifier {
       final prefs = await Supabase.instance.client
           .from('preferences')
           .select(
-              'parent_requirement_levels, date_start_offset_days, date_end_offset_days, overdue_grace_days, resolved_show_completed, resolved_days, resolved_show_dismissed')
+              'parent_requirement_levels, upcoming_days, overdue_grace_days, resolved_show_completed, resolved_days, resolved_show_dismissed')
           .eq('user_id', userId)
           .maybeSingle();
 
       if (prefs != null) {
         _parentRequirementLevels =
             List<String>.from(prefs['parent_requirement_levels'] ?? []);
-        _dateStartOffsetDays = prefs['date_start_offset_days'] ?? -7;
-        _dateEndOffsetDays = prefs['date_end_offset_days'] ?? 30;
+        _upcomingDays = prefs['upcoming_days'] ?? 30;
         _overdueGraceDays = prefs['overdue_grace_days'] ?? 14;
         _resolvedShowCompleted = prefs['resolved_show_completed'] ?? true;
         _resolvedDays = prefs['resolved_days'] ?? 60;
@@ -194,6 +188,7 @@ class AppState extends ChangeNotifier {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
+      final upcomingEndDate = today.add(Duration(days: _upcomingDays - 1));
 
       var upcomingQuery = Supabase.instance.client.from('user_tasks').select().or(
           'state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateTime.now().toIso8601String()})');
@@ -203,26 +198,20 @@ class AppState extends ChangeNotifier {
             'parent_requirement_level', _parentRequirementLevels);
       }
 
-      if (_dateRange != null) {
-        // Date range controls upcoming section only
-        upcomingQuery = upcomingQuery.or(
-            'due_date.is.null,and(due_date.gte.${_dateRange!.start.toIso8601String()},due_date.lte.${_dateRange!.end.toIso8601String()})');
-      }
-
       final upcomingResponse =
           await upcomingQuery.order('due_date', ascending: true);
       final upcomingCandidates = (upcomingResponse as List)
           .map((item) => Task.fromJson(item))
           .toList();
 
-      // Filter to only include tasks due today or in the future
+      // Filter to only include tasks due within the upcoming period
       _upcomingTasks = upcomingCandidates.where((task) {
         final effectiveDueDate = task.dueDate ?? task.createdAt;
         final taskDay = DateTime(effectiveDueDate.year, effectiveDueDate.month,
             effectiveDueDate.day);
 
-        // Task is due today or in the future
-        return !taskDay.isBefore(today);
+        // Task is due from today through the upcoming period
+        return !taskDay.isBefore(today) && !taskDay.isAfter(upcomingEndDate);
       }).toList();
     } catch (e) {
       debugPrint('Error fetching upcoming tasks: $e');
@@ -374,7 +363,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveDateOffsetPreferences() async {
+  Future<void> saveUpcomingDays() async {
     if (!_shouldPerformDatabaseOperations) return;
 
     try {
@@ -384,11 +373,10 @@ class AppState extends ChangeNotifier {
 
       await client.from('preferences').upsert({
         'user_id': userId,
-        'date_start_offset_days': _dateStartOffsetDays,
-        'date_end_offset_days': _dateEndOffsetDays,
+        'upcoming_days': _upcomingDays,
       });
     } catch (e) {
-      debugPrint('Error saving date offset preferences: $e');
+      debugPrint('Error saving upcoming days preference: $e');
     }
   }
 
