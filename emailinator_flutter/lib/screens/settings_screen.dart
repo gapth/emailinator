@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:emailinator_flutter/models/raw_email.dart';
+import 'package:emailinator_flutter/utils/date_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _userEmail;
   List<RawEmail> _recentEmails = [];
   bool _isLoadingEmails = false;
+  DateTime? _forcedToday = DateProvider.forcedToday;
 
   @override
   void initState() {
@@ -98,7 +101,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (_verificationId != null) {
         await Supabase.instance.client
             .from('forwarding_verifications')
-            .update({'clicked_at': DateTime.now().toIso8601String()}).eq(
+            .update({'clicked_at': DateProvider.now().toIso8601String()}).eq(
                 'id', _verificationId ?? 0);
       }
       if (mounted) {
@@ -107,6 +110,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _verificationId = null;
         });
       }
+    }
+  }
+
+  Future<void> _pickDebugDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _forcedToday ?? DateProvider.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      helpText: "Force today's date",
+    );
+    if (picked != null) {
+      DateProvider.setForcedToday(picked);
+      if (mounted) {
+        setState(() => _forcedToday = picked);
+      }
+    }
+  }
+
+  void _clearDebugDate() {
+    DateProvider.setForcedToday(null);
+    if (mounted) {
+      setState(() => _forcedToday = null);
     }
   }
 
@@ -185,6 +211,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ..._recentEmails.map((email) => _buildEmailListItem(email)),
             ],
           ),
+          if (kDebugMode) ...[
+            const SizedBox(height: 24),
+            ListTile(
+              leading: const Icon(Icons.bug_report),
+              title: Text(
+                _forcedToday == null
+                    ? "Debug: force today's date"
+                    : "Debug: forcing today's date to ${DateFormat('yMMMd').format(_forcedToday!)}",
+              ),
+              onTap: _pickDebugDate,
+              trailing: _forcedToday != null
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: _clearDebugDate,
+                    )
+                  : null,
+            ),
+          ],
         ],
       ),
     );

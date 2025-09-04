@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:emailinator_flutter/models/task.dart';
+import 'package:emailinator_flutter/utils/date_provider.dart';
 
 class AppState extends ChangeNotifier {
   /// Helper method to check if database operations should be performed
@@ -51,7 +52,7 @@ class AppState extends ChangeNotifier {
 
   /// Get the default date range based on current upcoming_days preference
   DateTimeRange getDefaultDateRange() {
-    final now = DateTime.now();
+    final now = DateProvider.now();
     final today = DateTime(now.year, now.month, now.day);
     return DateTimeRange(
       start: today,
@@ -149,14 +150,14 @@ class AppState extends ChangeNotifier {
 
   Future<void> _fetchOverdueTasks() async {
     try {
-      final now = DateTime.now();
+      final now = DateProvider.now();
       final today = DateTime(now.year, now.month, now.day);
       final graceThreshold = today.subtract(Duration(days: _overdueGraceDays));
 
       var overdueQuery = Supabase.instance.client
           .from('user_tasks')
           .select()
-          .or('state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateTime.now().toIso8601String()})')
+          .or('state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateProvider.now().toIso8601String()})')
           .or('due_date.is.null,due_date.lt.${today.toIso8601String()}'); // Past due or no due date
 
       if (_parentRequirementLevels.isNotEmpty) {
@@ -186,12 +187,12 @@ class AppState extends ChangeNotifier {
 
   Future<void> _fetchUpcomingTasks() async {
     try {
-      final now = DateTime.now();
+      final now = DateProvider.now();
       final today = DateTime(now.year, now.month, now.day);
       final upcomingEndDate = today.add(Duration(days: _upcomingDays - 1));
 
       var upcomingQuery = Supabase.instance.client.from('user_tasks').select().or(
-          'state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateTime.now().toIso8601String()})');
+          'state.eq.OPEN,and(state.eq.SNOOZED,snoozed_until.lte.${DateProvider.now().toIso8601String()})');
 
       if (_parentRequirementLevels.isNotEmpty) {
         upcomingQuery = upcomingQuery.inFilter(
@@ -221,7 +222,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _fetchResolvedTasks() async {
     try {
-      final now = DateTime.now();
+      final now = DateProvider.now();
 
       // Fetch completed tasks if enabled
       if (_resolvedShowCompleted) {
@@ -308,7 +309,7 @@ class AppState extends ChangeNotifier {
       _dismissedTasks.add(task);
     } else {
       // For OPEN or SNOOZED tasks, add based on date
-      final now = DateTime.now();
+      final now = DateProvider.now();
       final today = DateTime(now.year, now.month, now.day);
       final effectiveDueDate = task.dueDate ?? task.createdAt;
       final taskDay = DateTime(

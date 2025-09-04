@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import 'package:emailinator_flutter/models/task.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
+import 'package:emailinator_flutter/utils/date_provider.dart';
 
 class TaskListItem extends StatefulWidget {
   final Task task;
@@ -77,10 +78,12 @@ class _TaskListItemState extends State<TaskListItem> {
         'user_id': task.userId,
         'task_id': task.id,
         'state': newState,
-        'completed_at':
-            newState == 'COMPLETED' ? DateTime.now().toIso8601String() : null,
-        'dismissed_at':
-            newState == 'DISMISSED' ? DateTime.now().toIso8601String() : null,
+        'completed_at': newState == 'COMPLETED'
+            ? DateProvider.now().toIso8601String()
+            : null,
+        'dismissed_at': newState == 'DISMISSED'
+            ? DateProvider.now().toIso8601String()
+            : null,
         'snoozed_until': snoozedUntil?.toIso8601String(),
       };
 
@@ -104,12 +107,12 @@ class _TaskListItemState extends State<TaskListItem> {
           studentAction: task.studentAction,
           studentRequirementLevel: task.studentRequirementLevel,
           createdAt: task.createdAt,
-          updatedAt: DateTime.now(),
+          updatedAt: DateProvider.now(),
           state: newState,
           completedAt:
-              newState == 'COMPLETED' ? DateTime.now() : task.completedAt,
+              newState == 'COMPLETED' ? DateProvider.now() : task.completedAt,
           dismissedAt:
-              newState == 'DISMISSED' ? DateTime.now() : task.dismissedAt,
+              newState == 'DISMISSED' ? DateProvider.now() : task.dismissedAt,
           snoozedUntil: task.snoozedUntil,
         );
 
@@ -135,9 +138,9 @@ class _TaskListItemState extends State<TaskListItem> {
   Future<void> _snoozeTask() async {
     final selectedDate = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: DateProvider.now().add(const Duration(days: 1)),
+      firstDate: DateProvider.now(),
+      lastDate: DateProvider.now().add(const Duration(days: 365)),
       helpText: 'Snooze until',
     );
 

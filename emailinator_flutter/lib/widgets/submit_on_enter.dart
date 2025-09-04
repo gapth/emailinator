@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:emailinator_flutter/utils/date_provider.dart';
 
 /// Utility class to debounce submissions.
 class DebouncedSubmit {
   DebouncedSubmit(
       {this.debounce = const Duration(milliseconds: 800),
       DateTime Function()? now})
-      : _now = now ?? DateTime.now;
+      : _now = now ?? DateProvider.now;
   final Duration debounce;
   final DateTime Function() _now;
   DateTime? _last;
