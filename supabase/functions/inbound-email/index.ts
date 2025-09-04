@@ -90,43 +90,42 @@ export function createHandler({
 
     const rawBody = await req.text();
 
+    function extractAlias(data: any): string | null {
+      const inboundDomain = (
+        (typeof Deno !== 'undefined' && Deno.env.get('INBOUND_EMAIL_DOMAIN')) ||
+        'in.emailinator.app'
+      ).toLowerCase();
+      const suffix = '@' + inboundDomain;
+      const candidates: string[] = [];
+
+      if (typeof (data as any).OriginalRecipient === 'string') {
+        candidates.push((data as any).OriginalRecipient);
+      }
+      for (const field of ['ToFull', 'CcFull', 'BccFull'] as const) {
+        const arr = (data as any)[field];
+        if (Array.isArray(arr)) {
+          for (const item of arr) {
+            if (item?.Email) candidates.push(item.Email);
+          }
+        }
+      }
+      for (const field of ['To', 'Cc', 'Bcc'] as const) {
+        const val = (data as any)[field];
+        if (typeof val === 'string') {
+          const match = val.match(/<([^>]+)>/);
+          candidates.push(match ? match[1] : val);
+        }
+      }
+
+      for (const email of candidates) {
+        const lower = email.toLowerCase();
+        if (lower.endsWith(suffix)) return lower;
+      }
+      return null;
+    }
+
     try {
       const payload = JSON.parse(rawBody) as InboundPayload;
-
-      function extractAlias(data: any): string | null {
-        const inboundDomain = (
-          (typeof Deno !== 'undefined' &&
-            Deno.env.get('INBOUND_EMAIL_DOMAIN')) ||
-          'in.emailinator.app'
-        ).toLowerCase();
-        const suffix = '@' + inboundDomain;
-        const candidates: string[] = [];
-
-        if (typeof (data as any).OriginalRecipient === 'string') {
-          candidates.push((data as any).OriginalRecipient);
-        }
-        for (const field of ['ToFull', 'CcFull', 'BccFull'] as const) {
-          const arr = (data as any)[field];
-          if (Array.isArray(arr)) {
-            for (const item of arr) {
-              if (item?.Email) candidates.push(item.Email);
-            }
-          }
-        }
-        for (const field of ['To', 'Cc', 'Bcc'] as const) {
-          const val = (data as any)[field];
-          if (typeof val === 'string') {
-            const match = val.match(/<([^>]+)>/);
-            candidates.push(match ? match[1] : val);
-          }
-        }
-
-        for (const email of candidates) {
-          const lower = email.toLowerCase();
-          if (lower.endsWith(suffix)) return lower;
-        }
-        return null;
-      }
 
       const alias = extractAlias(payload);
       console.info(`[inbound-email] Alias: ${alias}`);

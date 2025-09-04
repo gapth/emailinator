@@ -79,6 +79,11 @@ def main() -> None:
         default=f"http://{user}:{password}@localhost:54321/functions/v1/inbound-email",
         help="Supabase inbound-email function URL",
     )
+    parser.add_argument(
+        "--alias",
+        required=True,
+        help="Alias for the email address",
+    )
     args = parser.parse_args()
 
     msg = read_email_file(args.file)
@@ -89,10 +94,15 @@ def main() -> None:
     message_id = _decode_header(msg.get("Message-ID"))
     text_body, html_body = _extract_bodies(msg)
 
+    # Tell inbound-email which alias this email is for by BCCing it to that address.
+    # The edge function will use that to look up the user.
+    bcc_email = args.alias
+
     # Use Postmark-style field names that the inbound-email function currently expects.
     payload = {
         "From": from_email,
         "To": to_email,
+        "Bcc": bcc_email,
         "Subject": subject,
         "TextBody": text_body,
         "HtmlBody": html_body,

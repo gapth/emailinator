@@ -38,7 +38,7 @@ Install JavaScript dependencies and run the Edge Function tests:
 
 ```bash
 npm install
-npm run test:inbound-email
+npm run test
 ```
 
 ### Manual email submission
@@ -46,13 +46,10 @@ npm run test:inbound-email
 Use the helper script to post a `.eml` file to the inbound-email Edge Function:
 
 ```bash
+source supabase/functions/.env.local # File not in Git, contains various env
 source .venv/bin/activate
-ACCESS_TOKEN=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
-  -H "apikey: $SUPABASE_ANON_KEY" \
-  -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" \
-  | jq -r .access_token)
-python -m emailinator.send_to_supabase --file path/to/email.eml --access-token "$ACCESS_TOKEN" --url "$SUPABASE_URL/functions/v1/inbound-email"
+EML_FILE= # Fill in
+python -m emailinator.send_to_supabase --file "$EML_FILE" --url "$SUPABASE_URL/functions/v1/inbound-email" --alias "$ALIAS"
 ```
 
 ### Scheduling reprocess-unprocessed
