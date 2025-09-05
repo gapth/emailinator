@@ -28,6 +28,9 @@ function createSupabaseStub(
   let insertAttempts = 0;
   return {
     state,
+    raw(sql: string) {
+      return { raw: sql };
+    },
     from(table: string) {
       if (table === 'raw_emails') {
         return {
@@ -177,6 +180,30 @@ function createSupabaseStub(
             state.budget = row.remaining_nano_usd;
             return { error: null };
           },
+          update(values: any) {
+            const builder: any = {
+              _updates: values,
+              _filters: [] as ((r: any) => boolean)[],
+              eq(field: string, value: any) {
+                // For atomic budget updates, we need to handle raw SQL expressions
+                if (field === 'user_id' && values.remaining_nano_usd?.raw) {
+                  // Extract the subtraction amount from the raw SQL expression
+                  const match = values.remaining_nano_usd.raw.match(
+                    /remaining_nano_usd - (\d+)/
+                  );
+                  if (match) {
+                    const subtractAmount = parseInt(match[1], 10);
+                    state.budget = Math.max(0, state.budget - subtractAmount);
+                  }
+                }
+                return builder;
+              },
+              then(resolve: any) {
+                return resolve({ data: null, error: null });
+              },
+            };
+            return builder;
+          },
         };
       }
       if (table === 'email_aliases') {
@@ -248,6 +275,7 @@ function makeHandler(supabase: any, fetchStub: any) {
     basicUser: BASIC_USER,
     basicPassword: BASIC_PASS,
     allowedIps: [ALLOWED_IP],
+    inboundDomain: 'in.emailinator.app',
   });
 }
 
@@ -332,6 +360,30 @@ test('skips processing when budget depleted', async () => {
   assertEquals(fetchStub.calls.length, 0);
   assertEquals(supabase.state.raw_emails.length, 1);
   assertEquals(supabase.state.raw_emails[0].status, 'UNPROCESSED');
+});
+
+test('atomically decrements budget after processing', async () => {
+  const initialBudget = 50_000_000; // 50 million nano USD
+  const supabase = createSupabaseStub([], { budgetNanoUsd: initialBudget });
+  const fetchStub = createFetchStub([{ title: 'New Task' }]);
+  const handler = makeHandler(supabase, fetchStub);
+
+  const res = await handler(makeReq({ TextBody: 'email content' }));
+  assertEquals(res.status, 200);
+
+  // Verify email was processed
+  assertEquals(fetchStub.calls.length, 1);
+  assertEquals(supabase.state.raw_emails.length, 1);
+  assertEquals(supabase.state.raw_emails[0].status, 'UPDATED_TASKS');
+
+  // Verify budget was decremented (should be less than initial)
+  assert(
+    supabase.state.budget < initialBudget,
+    `Budget should be decremented from ${initialBudget}, but is ${supabase.state.budget}`
+  );
+
+  // Verify budget is still positive (since we started with enough)
+  assert(supabase.state.budget >= 0, 'Budget should not go negative');
 });
 
 test('passes existing tasks and stores new set', async () => {
@@ -467,7 +519,7 @@ test('dedupes emails without Message-ID using other fields', async () => {
   assertEquals(res.status, 200);
 
   res = await handler(makeReq(payload));
-  assertEquals(res.status, 409);
+  assertEquals(res.status, 200); // Returns 200 to prevent retries by email service
   assertEquals(supabase.state.raw_emails.length, 1);
 });
 

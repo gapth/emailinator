@@ -56,6 +56,7 @@ export interface Deps {
   basicUser: string;
   basicPassword: string;
   allowedIps: string[];
+  inboundDomain: string;
 }
 
 export function createHandler({
@@ -65,6 +66,7 @@ export function createHandler({
   basicUser,
   basicPassword,
   allowedIps,
+  inboundDomain,
 }: Deps) {
   return async function handler(req: Request): Promise<Response> {
     if (req.method !== 'POST')
@@ -91,11 +93,8 @@ export function createHandler({
     const rawBody = await req.text();
 
     function extractAlias(data: any): string | null {
-      const inboundDomain = (
-        (typeof Deno !== 'undefined' && Deno.env.get('INBOUND_EMAIL_DOMAIN')) ||
-        'in.emailinator.app'
-      ).toLowerCase();
-      const suffix = '@' + inboundDomain;
+      const inboundDomainLower = inboundDomain.toLowerCase();
+      const suffix = '@' + inboundDomainLower;
       const candidates: string[] = [];
 
       if (typeof (data as any).OriginalRecipient === 'string') {
@@ -177,6 +176,13 @@ export function createHandler({
           });
         }
       } else {
+        // No Message-ID, fall back to deduplication by From/To/Subject/SentAt.
+        // This is less reliable, but better than nothing.
+        // Also return 200 OK on duplicate so the inbound
+        // email service (e.g. Postmark) will NOT retry later.
+        console.warn(
+          `[inbound-email] No Message-ID header present in email from ${payload.From} to ${payload.To} with subject "${payload.Subject}"`
+        );
         const query = supabase.from('raw_emails').select('id');
         const fromEmail = payload.From ?? null;
         const toEmail = payload.To ?? null;
@@ -192,7 +198,9 @@ export function createHandler({
         const { data: existingEmail, error: dupError } = await query;
         if (dupError) return new Response(dupError.message, { status: 500 });
         if (Array.isArray(existingEmail) && existingEmail.length > 0) {
-          return new Response('Duplicate Email', { status: 409 });
+          return new Response('Duplicate Message-ID (already processed)', {
+            status: 200,
+          });
         }
       }
 
@@ -314,9 +322,13 @@ export function createHandler({
         return new Response(applyResult.error, { status: 500 });
 
       const totalCost = inputCostNano + outputCostNano;
+      // Atomically decrement the remaining budget to avoid race conditions
       await supabase
         .from('processing_budgets')
-        .upsert({ user_id, remaining_nano_usd: remainingBudget - totalCost });
+        .update({
+          remaining_nano_usd: supabase.raw(`remaining_nano_usd - ${totalCost}`),
+        })
+        .eq('user_id', user_id);
 
       return new Response(
         JSON.stringify({ task_count: applyResult.taskCount }),
@@ -339,6 +351,7 @@ if (import.meta.main) {
   const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!;
   const POSTMARK_BASIC_USER = Deno.env.get('POSTMARK_BASIC_USER')!;
   const POSTMARK_BASIC_PASSWORD = Deno.env.get('POSTMARK_BASIC_PASSWORD')!;
+  const INBOUND_EMAIL_DOMAIN = Deno.env.get('INBOUND_EMAIL_DOMAIN')!;
   const POSTMARK_ALLOWED_IPS = (Deno.env.get('POSTMARK_ALLOWED_IPS') ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -350,6 +363,7 @@ if (import.meta.main) {
     basicUser: POSTMARK_BASIC_USER,
     basicPassword: POSTMARK_BASIC_PASSWORD,
     allowedIps: POSTMARK_ALLOWED_IPS,
+    inboundDomain: INBOUND_EMAIL_DOMAIN,
   });
   Deno.serve(handler);
 }
