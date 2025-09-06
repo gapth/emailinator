@@ -7,11 +7,12 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "npm run test:inbound-email && npm run test:reprocess-unprocessed && npm run test:deposit-budget",
-    "test:parallel": "npm run test:inbound-email & npm run test:reprocess-unprocessed & npm run test:deposit-budget & wait",
+    "test": "npm run test:inbound-email && npm run test:reprocess-unprocessed && npm run test:deposit-budget && npm run test:ai-utils",
+    "test:parallel": "npm run test:inbound-email & npm run test:reprocess-unprocessed & npm run test:deposit-budget & npm run test:ai-utils & wait",
     "test:inbound-email": "tsx supabase/functions/inbound-email/index.test.ts",
     "test:reprocess-unprocessed": "tsx supabase/functions/reprocess-unprocessed/index.test.ts",
     "test:deposit-budget": "tsx supabase/functions/deposit-budget/index.test.ts",
+    "test:ai-utils": "tsx supabase/functions/_shared/ai.test.ts",
     "format": "prettier --write \"supabase/functions/**/*.{js,ts,json}\""
   },
   "keywords": [],

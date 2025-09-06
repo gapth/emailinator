@@ -68,6 +68,7 @@ export function createHandler({
 
         const { tasks, promptTokens, completionTokens, rawContent } =
           await extractDeduplicatedTasks(
+            supabase,
             fetch,
             openAiApiKey,
             emailText,
@@ -91,10 +92,21 @@ export function createHandler({
           const totalCost =
             promptTokens * INPUT_NANO_USD_PER_TOKEN +
             completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
-          await supabase.from('processing_budgets').upsert({
-            user_id,
-            remaining_nano_usd: remainingBudget - totalCost,
-          });
+
+          // Atomically decrement the remaining budget using database function
+          const { error: budgetUpdateError } = await supabase.rpc(
+            'decrement_processing_budget',
+            {
+              p_user_id: user_id,
+              p_amount: totalCost,
+            }
+          );
+
+          if (budgetUpdateError) {
+            console.error(
+              `[reprocess-unprocessed] Budget update error for user ${user_id}: ${budgetUpdateError.message}`
+            );
+          }
         }
       } catch (e) {
         console.error(`[reprocess-unprocessed] email_id=${raw.id} error=${e}`);

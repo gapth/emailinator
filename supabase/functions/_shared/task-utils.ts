@@ -1,3 +1,5 @@
+import { runModel, type AIInvocation } from './ai.ts';
+
 export const MODEL_NAME = 'gpt-4.1-mini';
 export const INPUT_NANO_USD_PER_TOKEN = 400;
 export const OUTPUT_NANO_USD_PER_TOKEN = 1600;
@@ -170,6 +172,7 @@ export function sanitizeTasks(raw: any[]): Record<string, unknown>[] {
 }
 
 export async function extractDeduplicatedTasks(
+  supabase: any,
   fetchFn: typeof fetch,
   openAiApiKey: string,
   emailText: string,
@@ -181,52 +184,22 @@ export async function extractDeduplicatedTasks(
   completionTokens: number;
   rawContent: string;
 }> {
-  const prompt =
-    'You are a careful assistant for a busy parent.\n' +
-    'You are given an existing list of tasks and a new email.\n' +
-    'Combine the existing tasks with any tasks found in the email, merging entries that describe the same activity.\n' +
-    'Return the full deduplicated list of tasks.\n' +
-    'Only include actionable items (forms, payments, events, purchases, transport, volunteering).\n' +
-    'If an event requires attire, do not create a separate task for clothing; note attire inside `description`.\n' +
-    'Return only valid JSON that conforms to the provided JSON Schema. No prose.';
+  const userContent = `Existing tasks:\n${JSON.stringify({ tasks: existingTasks })}\n\nEmail:\n${emailText}`;
+  const responseFormat = { type: 'json_schema', json_schema: TASK_SCHEMA };
 
-  const body = {
-    model: MODEL_NAME,
-    messages: [
-      { role: 'system', content: prompt },
-      {
-        role: 'user',
-        content: `Existing tasks:\n${JSON.stringify({ tasks: existingTasks })}\n\nEmail:\n${emailText}`,
-      },
-    ],
-    response_format: { type: 'json_schema', json_schema: TASK_SCHEMA },
-  };
-
-  const resp = await fetchFn('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${openAiApiKey}`,
-    },
-    body: JSON.stringify(body),
+  const { content, aiInvocation } = await runModel({
+    supabase,
+    fetch: fetchFn,
+    openAiApiKey,
+    userId,
+    userContent,
+    responseFormat,
   });
 
-  if (!resp.ok) {
-    throw new Error(await resp.text());
-  }
-
-  const data = await resp.json();
-
-  const promptTokens = data?.usage?.prompt_tokens ?? 0;
-  const completionTokens = data?.usage?.completion_tokens ?? 0;
-  const apiCostNano =
-    promptTokens * INPUT_NANO_USD_PER_TOKEN +
-    completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
   console.info(
-    `[task-utils] user=${userId} API cost (USD): ${(apiCostNano / 1e9).toFixed(6)} (prompt=${promptTokens}, completion=${completionTokens})`
+    `[task-utils] user=${userId} API cost (USD): ${(aiInvocation.total_cost_nano / 1e9).toFixed(6)} (prompt=${aiInvocation.request_tokens}, completion=${aiInvocation.response_tokens})`
   );
 
-  const content = data.choices?.[0]?.message?.content ?? '{}';
   let parsed: any[] = [];
   try {
     parsed = JSON.parse(content).tasks ?? [];
@@ -234,7 +207,12 @@ export async function extractDeduplicatedTasks(
     parsed = [];
   }
   const tasks = sanitizeTasks(parsed);
-  return { tasks, promptTokens, completionTokens, rawContent: content };
+  return {
+    tasks,
+    promptTokens: aiInvocation.request_tokens,
+    completionTokens: aiInvocation.response_tokens,
+    rawContent: content,
+  };
 }
 
 export function chooseEmailText(payload: {
