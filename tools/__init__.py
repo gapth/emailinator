@@ -1,4 +1,4 @@
-"""Emailinator package initialization and logging setup."""
+"""Emailinator tools package initialization and logging setup."""
 
 import logging
 import sys
@@ -10,12 +10,12 @@ def _configure_logger() -> None:
     """Configure a package level logger that logs to stdout.
 
     Uvicorn configures its own loggers and does not automatically forward
-    library loggers such as ``emailinator``.  By attaching a ``StreamHandler``
-    to the package logger we ensure that calls to ``logging.getLogger("emailinator")``
+    library loggers such as ``emailinator_tools``.  By attaching a ``StreamHandler``
+    to the package logger we ensure that calls to ``logging.getLogger("emailinator_tools")``
     produce output when running ``make run`` or ``make web``.
     """
 
-    logger = logging.getLogger("emailinator")
+    logger = logging.getLogger("emailinator_tools")
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")

@@ -43,14 +43,11 @@ npm run test
 
 ### Manual email submission
 
-Use the helper script to post a `.eml` file to the inbound-email Edge Function:
+Use the helper script to post a `.eml` file to the inbound-email Edge Function.
 
-```bash
-source supabase/functions/.env.local # File not in Git, contains various env
-source .venv/bin/activate
-EML_FILE= # Fill in
-python -m emailinator.send_to_supabase --file "$EML_FILE" --url "$SUPABASE_URL/functions/v1/inbound-email" --alias "$ALIAS"
-```
+For detailed usage instructions, see the
+[send_to_supabase.py section](tools/README.md#send_to_supabasepy) in the tools
+documentation.
 
 ### Scheduling reprocess-unprocessed
 

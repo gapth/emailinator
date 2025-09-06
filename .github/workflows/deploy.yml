@@ -28,7 +28,7 @@ jobs:
         with:
           filters: |
             python:
-              - 'src/**'
+              - 'tools/**'
               - 'requirements.txt'
               - 'pyproject.toml'
               - '**/*.py'

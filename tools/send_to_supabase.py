@@ -63,20 +63,12 @@ def _extract_bodies(msg: Message) -> tuple[str | None, str | None]:
 
 
 def main() -> None:
-    user = os.getenv("POSTMARK_BASIC_USER")
-    password = os.getenv("POSTMARK_BASIC_PASSWORD")
-    if not user or not password:
-        raise EnvironmentError(
-            "POSTMARK_BASIC_USER and POSTMARK_BASIC_PASSWORD must be set in the environment"
-        )
-
     parser = argparse.ArgumentParser(
         description="Submit a .eml file to the Supabase inbound-email function",
     )
     parser.add_argument("--file", required=True, help="Path to .eml file")
     parser.add_argument(
         "--url",
-        default=f"http://{user}:{password}@localhost:54321/functions/v1/inbound-email",
         help="Supabase inbound-email function URL",
     )
     parser.add_argument(
@@ -85,6 +77,19 @@ def main() -> None:
         help="Alias for the email address",
     )
     args = parser.parse_args()
+
+    user = os.getenv("POSTMARK_BASIC_USER")
+    password = os.getenv("POSTMARK_BASIC_PASSWORD")
+    if not user or not password:
+        raise EnvironmentError(
+            "POSTMARK_BASIC_USER and POSTMARK_BASIC_PASSWORD must be set in the environment"
+        )
+
+    # Set default URL if not provided
+    if not args.url:
+        args.url = (
+            f"http://{user}:{password}@localhost:54321/functions/v1/inbound-email"
+        )
 
     msg = read_email_file(args.file)
     from_email = _decode_header(msg.get("From"))

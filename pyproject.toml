@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "emailinator"
+name = "emailinator-tools"
 version = "0.1.0"
-description = "Email parser utilities used by tests"
+description = "Email parser utilities and tools for Emailinator"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -14,13 +14,14 @@ dependencies = [
     "pytest>=7.0",
     "black>=23.0.0",
     "isort>=5.0.0",
+    "requests>=2.0.0",
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["tools"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["tools"]
 
 [tool.black]
 line-length = 88

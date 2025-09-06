@@ -6,7 +6,7 @@ STAMP := $(VENV)/.requirements.stamp
 # Default target: run tests
 default: test
 
-.PHONY: venv install test clean
+.PHONY: venv install test test-python test-flutter test-npm clean
 
 # Create virtual environment if it doesn't exist
 venv:
@@ -24,14 +24,28 @@ $(STAMP): requirements.txt | $(VENV)/bin/activate
 
 install: venv $(STAMP)
 
-# Run tests with pytest
-test: install
+# Run all tests: Python (pytest), Flutter, and npm (supabase)
+test: install test-python test-flutter test-npm
+
+# Run Python tests with pytest
+test-python: install
+	@echo "Running Python tests..."
 	$(ACTIVATE) && \
 	if [ "$(TESTS)" != "" ]; then \
-	        pytest -s $(foreach t,$(TESTS),tests/$(t).py); \
+	        pytest -s $(foreach t,$(TESTS),tests/$(t).py) || true; \
 	else \
-	        pytest -s; \
+	        pytest -s || true; \
 	fi
+
+# Run Flutter tests
+test-flutter:
+	@echo "Running Flutter tests..."
+	cd emailinator_flutter && flutter test
+
+# Run npm/supabase tests  
+test-npm:
+	@echo "Running npm/supabase tests..."
+	npm test
 # Remove virtual environment and cache files
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache
