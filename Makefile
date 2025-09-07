@@ -6,7 +6,7 @@ STAMP := $(VENV)/.requirements.stamp
 # Default target: run tests
 default: test
 
-.PHONY: venv install test test-python test-flutter test-npm clean
+.PHONY: venv install test test-python test-flutter test-npm test-inbound-email clean
 
 # Create virtual environment if it doesn't exist
 venv:
@@ -46,6 +46,12 @@ test-flutter:
 test-npm:
 	@echo "Running npm/supabase tests..."
 	npm test
+
+# Run inbound email integration tests
+test-inbound-email: install
+	@echo "Running inbound email integration tests..."
+	$(ACTIVATE) && pytest -s tests/inbound_email_tests.py::TestInboundEmail::test_inbound_email_integration -v
+
 # Remove virtual environment and cache files
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache

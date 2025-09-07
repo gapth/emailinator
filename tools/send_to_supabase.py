@@ -1,6 +1,8 @@
 import argparse
 import email
+import json
 import os
+import sys
 from email.header import decode_header, make_header
 from email.message import Message
 from pathlib import Path
@@ -103,6 +105,12 @@ def main() -> None:
     # The edge function will use that to look up the user.
     bcc_email = args.alias
 
+    # Force X-Forwarded-For so the edge function treats the request as coming from localhost.
+    headers = {"X-Forwarded-For": "127.0.0.1"}
+    print("Header:")
+    print(json.dumps(headers, indent=2, ensure_ascii=False))
+    print()
+
     # Use Postmark-style field names that the inbound-email function currently expects.
     payload = {
         "From": from_email,
@@ -115,15 +123,24 @@ def main() -> None:
         "MessageID": message_id,
         "ProviderMeta": {"source": "cli"},
     }
+    print("Payload:")
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    print()
 
-    # Force X-Forwarded-For so the edge function treats the request as coming from localhost.
-    headers = {"X-Forwarded-For": "127.0.0.1"}
     resp = requests.post(args.url, json=payload, auth=(user, password), headers=headers)
     print(f"Status: {resp.status_code}")
     try:
         print(resp.json())
     except Exception:
         print(resp.text)
+
+    # Exit with return code based on HTTP status
+    # 2xx status codes are considered success (exit code 0)
+    # All other status codes are considered failure (exit code 1)
+    if 200 <= resp.status_code < 300:
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -136,8 +136,12 @@ export function createHandler({
         .eq('active', true)
         .maybeSingle();
 
-      if (aliasError || !aliasRow)
+      if (aliasError || !aliasRow) {
+        console.warn(
+          `[inbound-email] Alias lookup failed for ${alias}: ${aliasError?.message}`
+        );
         return new Response('Unknown alias', { status: 404 });
+      }
 
       const user_id = aliasRow.user_id;
 
