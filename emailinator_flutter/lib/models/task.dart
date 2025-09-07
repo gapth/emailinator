@@ -5,7 +5,6 @@ class Task {
   final String title;
   final String? description;
   final DateTime? dueDate;
-  final String? consequenceIfIgnore;
   final String? parentAction;
   final String? parentRequirementLevel;
   final String? studentAction;
@@ -24,7 +23,6 @@ class Task {
     required this.title,
     this.description,
     this.dueDate,
-    this.consequenceIfIgnore,
     this.parentAction,
     this.parentRequirementLevel,
     this.studentAction,
@@ -46,7 +44,6 @@ class Task {
       description: json['description'],
       dueDate:
           json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
-      consequenceIfIgnore: json['consequence_if_ignore'],
       parentAction: json['parent_action'],
       parentRequirementLevel: json['parent_requirement_level'],
       studentAction: json['student_action'],

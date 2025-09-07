@@ -235,7 +235,6 @@ export function createHandler({
         title: t.title,
         description: t.description ?? null,
         due_date: t.due_date ?? null,
-        consequence_if_ignore: t.consequence_if_ignore ?? null,
         parent_action: t.parent_action ?? null,
         parent_requirement_level: t.parent_requirement_level ?? null,
         student_action: t.student_action ?? null,

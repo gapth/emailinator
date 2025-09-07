@@ -40,10 +40,6 @@ export const TASK_SCHEMA = {
               description:
                 'YYYY-MM-DD deadline if explicitly stated; otherwise omit.',
             },
-            consequence_if_ignore: {
-              type: 'string',
-              description: 'Natural-language consequence; infer if implicit.',
-            },
             parent_action: {
               type: 'string',
               enum: [
@@ -145,11 +141,6 @@ export function sanitizeTasks(raw: any[]): Record<string, unknown>[] {
       } else {
         task.due_date = null;
       }
-      task.consequence_if_ignore =
-        typeof t.consequence_if_ignore === 'string' &&
-        t.consequence_if_ignore.trim() !== ''
-          ? t.consequence_if_ignore
-          : null;
       task.parent_action = PARENT_ACTIONS.includes(t.parent_action)
         ? t.parent_action
         : null;
@@ -279,7 +270,6 @@ export async function replaceTasksAndUpdateEmail({
       title: t.title,
       description: t.description ?? null,
       due_date: t.due_date ?? null,
-      consequence_if_ignore: t.consequence_if_ignore ?? null,
       parent_action: t.parent_action ?? null,
       parent_requirement_level: t.parent_requirement_level ?? null,
       student_action: t.student_action ?? null,

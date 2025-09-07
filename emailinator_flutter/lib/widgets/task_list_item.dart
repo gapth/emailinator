@@ -101,7 +101,6 @@ class _TaskListItemState extends State<TaskListItem> {
           title: task.title,
           description: task.description,
           dueDate: task.dueDate,
-          consequenceIfIgnore: task.consequenceIfIgnore,
           parentAction: task.parentAction,
           parentRequirementLevel: task.parentRequirementLevel,
           studentAction: task.studentAction,
@@ -279,7 +278,6 @@ class _TaskListItemState extends State<TaskListItem> {
           addSection('Parent requirement:', task.parentRequirementLevel),
           addSection('Student action:', task.studentAction),
           addSection('Student requirement:', task.studentRequirementLevel),
-          addSection('Consequence if ignored:', task.consequenceIfIgnore),
           addSection(
               task.dueDate != null ? 'Due:' : 'Due?:',
               task.dueDate?.toIso8601String().substring(0, 10) ??

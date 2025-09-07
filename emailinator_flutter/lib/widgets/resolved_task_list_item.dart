@@ -92,7 +92,6 @@ class _ResolvedTaskListItemState extends State<ResolvedTaskListItem> {
           addSection('Parent requirement:', task.parentRequirementLevel),
           addSection('Student action:', task.studentAction),
           addSection('Student requirement:', task.studentRequirementLevel),
-          addSection('Consequence if ignored:', task.consequenceIfIgnore),
           addSection(
               task.dueDate != null ? 'Due:' : 'Due?:',
               task.dueDate?.toIso8601String().substring(0, 10) ??
