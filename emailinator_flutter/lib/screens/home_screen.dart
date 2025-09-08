@@ -7,6 +7,7 @@ import 'package:emailinator_flutter/widgets/task_list_item.dart';
 import 'package:emailinator_flutter/widgets/resolved_task_list_item.dart';
 import 'package:emailinator_flutter/widgets/filter_bar.dart';
 import 'package:emailinator_flutter/screens/settings_screen.dart';
+import 'package:emailinator_flutter/utils/format_utils.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -103,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (appState.isLoading &&
                     appState.overdueTasks.isEmpty &&
                     appState.upcomingTasks.isEmpty &&
+                    appState.snoozedTasks.isEmpty &&
                     appState.completedTasks.isEmpty &&
                     appState.dismissedTasks.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
@@ -110,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 if (appState.overdueTasks.isEmpty &&
                     appState.upcomingTasks.isEmpty &&
+                    appState.snoozedTasks.isEmpty &&
                     appState.completedTasks.isEmpty &&
                     appState.dismissedTasks.isEmpty) {
                   return const Center(child: Text('No tasks found.'));
@@ -132,6 +135,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   return aDate.compareTo(bDate);
                 });
 
+                // Sort snoozed tasks by increasing snoozed_until date
+                appState.snoozedTasks.sort((a, b) {
+                  if (a.snoozedUntil == null && b.snoozedUntil == null) {
+                    return 0;
+                  }
+                  if (a.snoozedUntil == null) return 1;
+                  if (b.snoozedUntil == null) return -1;
+                  return a.snoozedUntil!.compareTo(b.snoozedUntil!);
+                });
+
                 return RefreshIndicator(
                   onRefresh: _loadTasks,
                   child: ListView(
@@ -148,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'Overdue',
+                              'Overdue (${FormatUtils.formatCountWithCap(overdueTasks.length)})',
                               style: Theme.of(context)
                                   .textTheme
                                   .titleLarge
@@ -186,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'Upcoming',
+                              'Upcoming (${FormatUtils.formatCountWithCap(upcomingTasks.length)})',
                               style: Theme.of(context)
                                   .textTheme
                                   .titleLarge
@@ -210,6 +223,28 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
+
+                      // Snoozed section - only shown if there are snoozed tasks
+                      if (appState.snoozedTasks.isNotEmpty) ...[
+                        ExpansionTile(
+                          title: Row(
+                            children: [
+                              const Icon(
+                                Icons.snooze,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                  'Snoozed (${FormatUtils.formatCountWithCap(appState.snoozedTasks.length)})'),
+                            ],
+                          ),
+                          initiallyExpanded: false, // Collapsed by default
+                          children: appState.snoozedTasks
+                              .map((task) => TaskListItem(task: task))
+                              .toList(),
+                        ),
+                      ],
 
                       // Resolved section (formerly History) - always shown if filters allow
                       if (appState.resolvedShowCompleted ||
@@ -250,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                    'Completed (${appState.completedTasks.length})'),
+                                    'Completed (${FormatUtils.formatCountWithCap(appState.completedTasks.length)})'),
                               ],
                             ),
                             initiallyExpanded: true,
@@ -286,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                    'Dismissed (${appState.dismissedTasks.length})'),
+                                    'Dismissed (${FormatUtils.formatCountWithCap(appState.dismissedTasks.length)})'),
                               ],
                             ),
                             initiallyExpanded: true,

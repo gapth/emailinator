@@ -41,7 +41,7 @@ class _TaskListItemState extends State<TaskListItem> {
       SnackBar(
         content: Text(
           newState == 'COMPLETED'
-              ? 'Marked task as done'
+              ? 'Marked task as completed'
               : newState == 'DISMISSED'
                   ? 'Dismissed task'
                   : 'Snoozed task',
@@ -84,7 +84,8 @@ class _TaskListItemState extends State<TaskListItem> {
         'dismissed_at': newState == 'DISMISSED'
             ? DateProvider.now().toIso8601String()
             : null,
-        'snoozed_until': snoozedUntil?.toIso8601String(),
+        'snoozed_until':
+            newState == 'SNOOZED' ? snoozedUntil?.toIso8601String() : null,
       };
 
       await Supabase.instance.client
@@ -92,7 +93,9 @@ class _TaskListItemState extends State<TaskListItem> {
           .upsert(updateData, onConflict: 'user_id, task_id');
 
       // Update the local task object and move it to the appropriate list
-      if (newState == 'COMPLETED' || newState == 'DISMISSED') {
+      if (newState == 'COMPLETED' ||
+          newState == 'DISMISSED' ||
+          newState == 'SNOOZED') {
         // Create an updated task object with the new state and timestamps
         final updatedTask = Task(
           id: task.id,
@@ -112,10 +115,10 @@ class _TaskListItemState extends State<TaskListItem> {
               newState == 'COMPLETED' ? DateProvider.now() : task.completedAt,
           dismissedAt:
               newState == 'DISMISSED' ? DateProvider.now() : task.dismissedAt,
-          snoozedUntil: task.snoozedUntil,
+          snoozedUntil: newState == 'SNOOZED' ? snoozedUntil : null,
         );
 
-        // Add the updated task to the appropriate resolved list
+        // Add the updated task to the appropriate list
         appState.addTask(updatedTask);
       }
     } catch (e) {
@@ -331,8 +334,34 @@ class _TaskListItemState extends State<TaskListItem> {
                 icon: const Icon(Icons.check_circle),
                 label: const Text('Complete'),
               ),
+            ] else if (task.state == 'SNOOZED') ...[
+              // Actions for snoozed tasks
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _updateTaskStatus('DISMISSED');
+                },
+                icon: const Icon(Icons.do_not_disturb),
+                label: const Text('Dismiss'),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _reopenTask();
+                },
+                icon: const Icon(Icons.undo),
+                label: const Text('Unsnooze'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _updateTaskStatus('COMPLETED');
+                },
+                icon: const Icon(Icons.check_circle),
+                label: const Text('Complete'),
+              ),
             ] else ...[
-              // Reopen action for completed/dismissed/snoozed tasks
+              // Reopen action for completed/dismissed tasks
               TextButton.icon(
                 onPressed: () {
                   Navigator.of(ctx).pop();
@@ -385,7 +414,7 @@ class _TaskListItemState extends State<TaskListItem> {
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 icon: Icons.check_circle,
-                label: 'Done',
+                label: 'Complete',
               ),
             ],
           ),
@@ -400,6 +429,21 @@ class _TaskListItemState extends State<TaskListItem> {
                   Text('Due?: ${task.createdAt.toString().substring(0, 10)}'),
                 if (task.parentRequirementLevel != null)
                   Text('Parent requirement: ${task.parentRequirementLevel}'),
+                if (task.state == 'SNOOZED' && task.snoozedUntil != null)
+                  Row(
+                    children: [
+                      const Icon(Icons.snooze, color: Colors.orange, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Snoozed until ${_formatDate(task.snoozedUntil)}',
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
             onTap: () => _showDetails(context),

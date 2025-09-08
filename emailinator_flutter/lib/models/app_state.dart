@@ -18,6 +18,7 @@ class AppState extends ChangeNotifier {
 
   List<Task> _overdueTasks = [];
   List<Task> _upcomingTasks = [];
+  List<Task> _snoozedTasks = [];
   List<Task> _completedTasks = [];
   List<Task> _dismissedTasks = [];
   bool _isLoading = false;
@@ -33,6 +34,7 @@ class AppState extends ChangeNotifier {
   List<Task> get tasks => [..._overdueTasks, ..._upcomingTasks];
   List<Task> get overdueTasks => _overdueTasks;
   List<Task> get upcomingTasks => _upcomingTasks;
+  List<Task> get snoozedTasks => _snoozedTasks;
   List<Task> get completedTasks => _completedTasks;
   List<Task> get dismissedTasks => _dismissedTasks;
   bool get isLoading => _isLoading;
@@ -131,6 +133,7 @@ class AppState extends ChangeNotifier {
       await Future.wait([
         _fetchOverdueTasks(),
         _fetchUpcomingTasks(),
+        _fetchSnoozedTasks(),
         if (_resolvedShowCompleted || _resolvedShowDismissed)
           _fetchResolvedTasks(),
       ]);
@@ -170,6 +173,50 @@ class AppState extends ChangeNotifier {
       final overdueCandidates =
           (overdueResponse as List).map((item) => Task.fromJson(item)).toList();
 
+      // Update snoozed tasks to OPEN state if their snooze time has passed
+      final snoozedTasksToReopen = overdueCandidates
+          .where((task) =>
+              task.state == 'SNOOZED' &&
+              task.snoozedUntil != null &&
+              task.snoozedUntil!.isBefore(now))
+          .toList();
+
+      if (snoozedTasksToReopen.isNotEmpty && _shouldPerformDatabaseOperations) {
+        for (final task in snoozedTasksToReopen) {
+          await Supabase.instance.client.from('user_task_states').upsert({
+            'user_id': task.userId,
+            'task_id': task.id,
+            'state': 'OPEN',
+            'snoozed_until': null,
+          }, onConflict: 'user_id, task_id');
+        }
+
+        // Update the local task objects to reflect the database changes
+        for (int i = 0; i < overdueCandidates.length; i++) {
+          final task = overdueCandidates[i];
+          if (snoozedTasksToReopen.any((t) => t.id == task.id)) {
+            overdueCandidates[i] = Task(
+              id: task.id,
+              userId: task.userId,
+              emailId: task.emailId,
+              title: task.title,
+              description: task.description,
+              dueDate: task.dueDate,
+              parentAction: task.parentAction,
+              parentRequirementLevel: task.parentRequirementLevel,
+              studentAction: task.studentAction,
+              studentRequirementLevel: task.studentRequirementLevel,
+              createdAt: task.createdAt,
+              updatedAt: task.updatedAt,
+              state: 'OPEN',
+              completedAt: task.completedAt,
+              dismissedAt: task.dismissedAt,
+              snoozedUntil: null,
+            );
+          }
+        }
+      }
+
       // Filter in memory to apply grace period logic for tasks with no due date
       _overdueTasks = overdueCandidates.where((task) {
         final effectiveDueDate = task.dueDate ?? task.createdAt;
@@ -205,6 +252,50 @@ class AppState extends ChangeNotifier {
           .map((item) => Task.fromJson(item))
           .toList();
 
+      // Update snoozed tasks to OPEN state if their snooze time has passed
+      final snoozedTasksToReopen = upcomingCandidates
+          .where((task) =>
+              task.state == 'SNOOZED' &&
+              task.snoozedUntil != null &&
+              task.snoozedUntil!.isBefore(now))
+          .toList();
+
+      if (snoozedTasksToReopen.isNotEmpty && _shouldPerformDatabaseOperations) {
+        for (final task in snoozedTasksToReopen) {
+          await Supabase.instance.client.from('user_task_states').upsert({
+            'user_id': task.userId,
+            'task_id': task.id,
+            'state': 'OPEN',
+            'snoozed_until': null,
+          }, onConflict: 'user_id, task_id');
+        }
+
+        // Update the local task objects to reflect the database changes
+        for (int i = 0; i < upcomingCandidates.length; i++) {
+          final task = upcomingCandidates[i];
+          if (snoozedTasksToReopen.any((t) => t.id == task.id)) {
+            upcomingCandidates[i] = Task(
+              id: task.id,
+              userId: task.userId,
+              emailId: task.emailId,
+              title: task.title,
+              description: task.description,
+              dueDate: task.dueDate,
+              parentAction: task.parentAction,
+              parentRequirementLevel: task.parentRequirementLevel,
+              studentAction: task.studentAction,
+              studentRequirementLevel: task.studentRequirementLevel,
+              createdAt: task.createdAt,
+              updatedAt: task.updatedAt,
+              state: 'OPEN',
+              completedAt: task.completedAt,
+              dismissedAt: task.dismissedAt,
+              snoozedUntil: null,
+            );
+          }
+        }
+      }
+
       // Filter to only include tasks due within the upcoming period
       _upcomingTasks = upcomingCandidates.where((task) {
         final effectiveDueDate = task.dueDate ?? task.createdAt;
@@ -217,6 +308,33 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching upcoming tasks: $e');
       _upcomingTasks = [];
+    }
+  }
+
+  Future<void> _fetchSnoozedTasks() async {
+    try {
+      final now = DateProvider.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      var snoozedQuery = Supabase.instance.client
+          .from('user_tasks')
+          .select()
+          .eq('state', 'SNOOZED')
+          .gt('snoozed_until', today.toIso8601String());
+
+      if (_parentRequirementLevels.isNotEmpty) {
+        snoozedQuery = snoozedQuery.inFilter(
+            'parent_requirement_level', _parentRequirementLevels);
+      }
+
+      final snoozedResponse =
+          await snoozedQuery.order('snoozed_until', ascending: true);
+
+      _snoozedTasks =
+          (snoozedResponse as List).map((item) => Task.fromJson(item)).toList();
+    } catch (e) {
+      debugPrint('Error fetching snoozed tasks: $e');
+      _snoozedTasks = [];
     }
   }
 
@@ -293,6 +411,7 @@ class AppState extends ChangeNotifier {
   void removeTask(String taskId) {
     _overdueTasks.removeWhere((task) => task.id == taskId);
     _upcomingTasks.removeWhere((task) => task.id == taskId);
+    _snoozedTasks.removeWhere((task) => task.id == taskId);
     _completedTasks.removeWhere((task) => task.id == taskId);
     _dismissedTasks.removeWhere((task) => task.id == taskId);
     notifyListeners();
@@ -307,8 +426,34 @@ class AppState extends ChangeNotifier {
       _completedTasks.add(task);
     } else if (task.state == 'DISMISSED') {
       _dismissedTasks.add(task);
+    } else if (task.state == 'SNOOZED' && task.snoozedUntil != null) {
+      final now = DateProvider.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final snoozedDay = DateTime(task.snoozedUntil!.year,
+          task.snoozedUntil!.month, task.snoozedUntil!.day);
+
+      if (snoozedDay.isAfter(today)) {
+        // Task is snoozed until a future date (after today)
+        _snoozedTasks.add(task);
+      } else {
+        // Snoozed date is today or has passed, treat as OPEN task
+        final effectiveDueDate = task.dueDate ?? task.createdAt;
+        final taskDay = DateTime(effectiveDueDate.year, effectiveDueDate.month,
+            effectiveDueDate.day);
+
+        if (taskDay.isBefore(today)) {
+          // Check if within grace period for overdue
+          final graceThreshold =
+              today.subtract(Duration(days: _overdueGraceDays));
+          if (!taskDay.isBefore(graceThreshold)) {
+            _overdueTasks.add(task);
+          }
+        } else {
+          _upcomingTasks.add(task);
+        }
+      }
     } else {
-      // For OPEN or SNOOZED tasks, add based on date
+      // For OPEN tasks, add based on date
       final now = DateProvider.now();
       final today = DateTime(now.year, now.month, now.day);
       final effectiveDueDate = task.dueDate ?? task.createdAt;

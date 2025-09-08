@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
+import 'package:emailinator_flutter/utils/format_utils.dart';
 
 class FilterBar extends StatelessWidget {
   final VoidCallback? onFiltersChanged;
@@ -24,10 +25,6 @@ class FilterBar extends StatelessWidget {
     return codes.join(' ');
   }
 
-  String _formatCountWithCap(int count) {
-    return count > 99 ? '99+' : count.toString();
-  }
-
   String _formatResolvedChip(AppState appState) {
     final showCompleted = appState.resolvedShowCompleted;
     final showDismissed = appState.resolvedShowDismissed;
@@ -37,11 +34,11 @@ class FilterBar extends StatelessWidget {
     final parts = <String>[];
 
     if (showCompleted && completedCount > 0) {
-      parts.add('✓${_formatCountWithCap(completedCount)}');
+      parts.add('✓${FormatUtils.formatCountWithCap(completedCount)}');
     }
 
     if (showDismissed && dismissedCount > 0) {
-      parts.add('×${_formatCountWithCap(dismissedCount)}');
+      parts.add('×${FormatUtils.formatCountWithCap(dismissedCount)}');
     }
 
     if (parts.isEmpty) {
@@ -459,7 +456,7 @@ class FilterBar extends StatelessWidget {
           Tooltip(
             message: _getOverdueTooltip(appState),
             child: ActionChip(
-              label: Text(_formatCountWithCap(overdueCount)),
+              label: Text(FormatUtils.formatCountWithCap(overdueCount)),
               avatar: const Icon(Icons.error_outline, size: 16),
               backgroundColor: Colors.red.shade50,
               labelStyle: TextStyle(
@@ -477,7 +474,7 @@ class FilterBar extends StatelessWidget {
           Tooltip(
             message: _getUpcomingTooltip(appState),
             child: ActionChip(
-              label: Text(_formatCountWithCap(upcomingCount)),
+              label: Text(FormatUtils.formatCountWithCap(upcomingCount)),
               avatar: const Icon(Icons.calendar_month, size: 16),
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               labelStyle: TextStyle(
