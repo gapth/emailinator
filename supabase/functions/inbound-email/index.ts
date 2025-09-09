@@ -258,8 +258,6 @@ export function createHandler({
           provider_meta: payload.ProviderMeta ?? {},
           sent_at: sentAt,
           message_id: messageId,
-          openai_input_cost_nano_usd: 0,
-          openai_output_cost_nano_usd: 0,
           tasks_before: existingCount,
           tasks_after: existingCount,
           status: 'UNPROCESSED',
@@ -270,24 +268,7 @@ export function createHandler({
           status: 200,
         });
       }
-
-      const { tasks, promptTokens, completionTokens, rawContent } =
-        await extractDeduplicatedTasks(
-          supabase,
-          fetch,
-          openAiApiKey,
-          emailText,
-          existingForAi,
-          user_id // pass user id for logging
-        );
-      console.info(
-        `[inbound-email] user=${user_id} deduped_tasks=${tasks.length}`
-      );
-
-      const inputCostNano = promptTokens * INPUT_NANO_USD_PER_TOKEN;
-      const outputCostNano = completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
-
-      // Store raw email and grab ID for task linking
+      // Store raw email first to get its ID for linking with ai_invocations
       const { data: rawData, error: rawError } = await supabase
         .from('raw_emails')
         .insert({
@@ -300,8 +281,6 @@ export function createHandler({
           provider_meta: payload.ProviderMeta ?? {},
           sent_at: sentAt,
           message_id: messageId,
-          openai_input_cost_nano_usd: inputCostNano,
-          openai_output_cost_nano_usd: outputCostNano,
           tasks_before: existingCount,
           tasks_after: existingCount,
           status: 'UNPROCESSED',
@@ -310,6 +289,20 @@ export function createHandler({
         .single();
 
       if (rawError) return new Response(rawError.message, { status: 500 });
+
+      const { tasks, promptTokens, completionTokens, rawContent } =
+        await extractDeduplicatedTasks(
+          supabase,
+          fetch,
+          openAiApiKey,
+          emailText,
+          existingForAi,
+          user_id,
+          rawData.id
+        );
+      console.info(
+        `[inbound-email] user=${user_id} deduped_tasks=${tasks.length}`
+      );
 
       const applyResult = await replaceTasksAndUpdateEmail({
         supabase,
@@ -325,7 +318,9 @@ export function createHandler({
       if (!applyResult.success)
         return new Response(applyResult.error, { status: 500 });
 
-      const totalCost = inputCostNano + outputCostNano;
+      const totalCost =
+        promptTokens * INPUT_NANO_USD_PER_TOKEN +
+        completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
       // Atomically decrement the remaining budget using database function
       const { data: _budgetResult, error: budgetUpdateError } =
         await supabase.rpc('decrement_processing_budget', {

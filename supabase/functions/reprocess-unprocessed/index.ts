@@ -72,7 +72,8 @@ export function createHandler({
             openAiApiKey,
             emailText,
             existingForAi,
-            user_id
+            user_id,
+            raw.id
           );
 
         const result = await replaceTasksAndUpdateEmail({

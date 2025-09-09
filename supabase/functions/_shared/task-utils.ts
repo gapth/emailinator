@@ -168,7 +168,8 @@ export async function extractDeduplicatedTasks(
   openAiApiKey: string,
   emailText: string,
   existingTasks: Record<string, unknown>[],
-  userId: string
+  userId: string,
+  emailId?: string | number
 ): Promise<{
   tasks: Record<string, unknown>[];
   promptTokens: number;
@@ -183,6 +184,7 @@ export async function extractDeduplicatedTasks(
     fetch: fetchFn,
     openAiApiKey,
     userId,
+    emailId: (emailId as any) ?? undefined,
     userContent,
     responseFormat,
   });
@@ -237,7 +239,7 @@ export async function replaceTasksAndUpdateEmail({
 }: {
   supabase: any;
   userId: string;
-  rawEmailId: number;
+  rawEmailId: string | number;
   tasks: Record<string, unknown>[];
   existingRows: any[];
   promptTokens: number;
@@ -245,9 +247,6 @@ export async function replaceTasksAndUpdateEmail({
   rawContent: string;
   logPrefix: string;
 }): Promise<{ success: boolean; taskCount: number; error?: string }> {
-  const inputCostNano = promptTokens * INPUT_NANO_USD_PER_TOKEN;
-  const outputCostNano = completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
-
   // Delete exactly the tasks that were passed in (more reliable than duplicating query logic)
   if (existingRows.length > 0) {
     const existingIds = existingRows
@@ -295,8 +294,6 @@ export async function replaceTasksAndUpdateEmail({
     .update({
       tasks_after: tasks.length,
       status: 'UPDATED_TASKS',
-      openai_input_cost_nano_usd: inputCostNano,
-      openai_output_cost_nano_usd: outputCostNano,
     })
     .eq('id', rawEmailId);
 

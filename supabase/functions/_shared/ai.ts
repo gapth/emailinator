@@ -15,6 +15,7 @@ export interface AIInvocation {
   id: string;
   config_id: string;
   user_id: string;
+  email_id?: string | null;
   request_tokens: number;
   response_tokens: number;
   input_cost_nano: number;
@@ -43,6 +44,7 @@ export interface RunModelDeps {
   fetch: typeof fetch;
   openAiApiKey: string;
   userId: string;
+  emailId?: string;
   userContent: string;
   responseFormat?: any;
 }
@@ -52,6 +54,7 @@ export async function runModel({
   fetch,
   openAiApiKey,
   userId,
+  emailId,
   userContent,
   responseFormat,
 }: RunModelDeps): Promise<{
@@ -99,6 +102,7 @@ export async function runModel({
     .insert({
       config_id: config.id,
       user_id: userId,
+      email_id: emailId ?? null,
       request_tokens: promptTokens,
       response_tokens: completionTokens,
       input_cost_nano: inputCost,
