@@ -160,8 +160,8 @@ class TestInboundEmail:
         if not email_data_dir.exists():
             pytest.fail(f"Email data directory not found: {email_data_dir}")
 
-        # Find all .eml files
-        eml_files = list(email_data_dir.glob("*.eml"))
+        # Find all .eml files and sort them alphabetically by filename
+        eml_files = sorted(email_data_dir.glob("*.eml"), key=lambda x: x.name)
 
         if not eml_files:
             pytest.fail(f"No .eml files found in {email_data_dir}")
