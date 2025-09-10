@@ -30,7 +30,8 @@ export function createHandler({
     const { data: raws, error } = await supabase
       .from('raw_emails')
       .select('*')
-      .eq('status', 'UNPROCESSED');
+      .eq('status', 'UNPROCESSED')
+      .order('sent_at', { ascending: true });
     if (error) return new Response(error.message, { status: 500 });
 
     let processed = 0;

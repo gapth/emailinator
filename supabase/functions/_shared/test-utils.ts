@@ -72,6 +72,7 @@ export function createSupabaseStub(
           select() {
             const builder: any = {
               _filters: [] as ((r: any) => boolean)[],
+              _orderBy: null as { field: string; ascending: boolean } | null,
               eq(field: string, value: any) {
                 this._filters.push((r: any) => r[field] === value);
                 return builder;
@@ -84,10 +85,27 @@ export function createSupabaseStub(
                 );
                 return builder;
               },
+              order(field: string, opts: { ascending: boolean }) {
+                this._orderBy = { field, ascending: opts.ascending };
+                return builder;
+              },
               then(resolve: any) {
-                const data = state.raw_emails.filter((r) =>
+                let data = state.raw_emails.filter((r) =>
                   builder._filters.every((f: any) => f(r))
                 );
+
+                // Apply ordering if specified
+                if (builder._orderBy) {
+                  const { field, ascending } = builder._orderBy;
+                  data = data.sort((a, b) => {
+                    const aVal = a[field];
+                    const bVal = b[field];
+                    if (aVal < bVal) return ascending ? -1 : 1;
+                    if (aVal > bVal) return ascending ? 1 : -1;
+                    return 0;
+                  });
+                }
+
                 return resolve({ data, error: null });
               },
             };

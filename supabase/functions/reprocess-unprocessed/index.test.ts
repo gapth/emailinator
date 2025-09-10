@@ -94,3 +94,80 @@ test('skips when budget depleted', async () => {
   const body = await res.json();
   assertEquals(body.processed, 0);
 });
+
+test('processes emails in chronological order by sent_at', async () => {
+  const rawEmails = [
+    {
+      id: 3,
+      user_id: 'user-1',
+      text_body: 'third email',
+      html_body: null,
+      status: 'UNPROCESSED',
+      sent_at: '2025-09-09T12:00:00Z',
+    },
+    {
+      id: 1,
+      user_id: 'user-1',
+      text_body: 'first email',
+      html_body: null,
+      status: 'UNPROCESSED',
+      sent_at: '2025-09-09T10:00:00Z',
+    },
+    {
+      id: 2,
+      user_id: 'user-1',
+      text_body: 'second email',
+      html_body: null,
+      status: 'UNPROCESSED',
+      sent_at: '2025-09-09T11:00:00Z',
+    },
+  ];
+  const supabase = createSupabaseStub([]);
+  supabase.state.raw_emails = rawEmails;
+
+  // Track the order of processing by capturing the email text passed to AI
+  const processedEmails: string[] = [];
+  const fetchStub = createFetchStub([{ title: 'Task' }]);
+  const originalFetch = fetchStub;
+  const wrappedFetch = (url: string, init?: RequestInit) => {
+    const body = JSON.parse(init?.body?.toString() || '{}');
+    const emailText = body.messages?.[1]?.content || '';
+    if (emailText.includes('email')) {
+      processedEmails.push(emailText);
+    }
+    return originalFetch(url, init);
+  };
+  (wrappedFetch as typeof fetchStub).calls = fetchStub.calls;
+
+  const handler = createHandler({
+    supabase,
+    fetch: wrappedFetch as typeof fetch,
+    openAiApiKey: 'test',
+    serviceRoleKey: 'svc',
+  });
+
+  const res = await handler(
+    new Request('http://localhost', {
+      method: 'POST',
+      headers: { authorization: 'Bearer svc' },
+    })
+  );
+
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.processed, 3);
+
+  // Verify that emails were processed in chronological order (oldest first)
+  assert(
+    processedEmails[0].includes('first email'),
+    'First email should be processed first'
+  );
+  assert(
+    processedEmails[1].includes('second email'),
+    'Second email should be processed second'
+  );
+  assert(
+    processedEmails[2].includes('third email'),
+    'Third email should be processed third'
+  );
+});
