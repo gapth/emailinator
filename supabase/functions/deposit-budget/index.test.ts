@@ -6,34 +6,35 @@ function assertEquals(actual: unknown, expected: unknown, msg = '') {
 import { createHandler } from './index.ts';
 import { test } from 'node:test';
 
-function createSupabaseStub(initial = 0) {
-  const state = { budget: initial };
+function createSupabaseStub(initialBudgets: Record<string, number> = {}) {
+  const state = { budgets: initialBudgets };
   return {
     state,
-    from(table: string) {
-      if (table !== 'processing_budgets') throw new Error('unknown table');
-      return {
-        select() {
-          const builder: any = {
-            eq(_f: string, _v: any) {
-              return builder;
-            },
-            single() {
-              if (state.budget === undefined)
-                return { data: null, error: { code: 'PGRST116' } };
-              return {
-                data: { remaining_nano_usd: state.budget },
-                error: null,
-              };
-            },
+    auth: {
+      admin: {
+        listUsers() {
+          const users = Object.keys(state.budgets).map((id) => ({ id }));
+          return {
+            data: { users },
+            error: null,
           };
-          return builder;
         },
-        upsert(row: any) {
-          state.budget = row.remaining_nano_usd;
-          return { error: null };
-        },
-      };
+      },
+    },
+    rpc(
+      functionName: string,
+      params: { p_user_id: string; p_amount: number; p_max_budget: number }
+    ) {
+      if (functionName !== 'increment_processing_budget') {
+        throw new Error(`Unknown function: ${functionName}`);
+      }
+
+      const { p_user_id, p_amount, p_max_budget } = params;
+      const current = state.budgets[p_user_id] || 0;
+      const newBalance = Math.min(current + p_amount, p_max_budget);
+      state.budgets[p_user_id] = newBalance;
+
+      return { data: newBalance, error: null };
     },
   };
 }
@@ -43,6 +44,7 @@ test('requires service role key', async () => {
   const handler = createHandler({
     supabase,
     depositNanoUsd: 10,
+    maxAccruedNanoUsd: 100,
     serviceRoleKey: 'svc',
   });
   const res = await handler(
@@ -51,22 +53,43 @@ test('requires service role key', async () => {
   assertEquals(res.status, 401);
 });
 
-test('deposits budget', async () => {
-  const supabase = createSupabaseStub(5);
+test('deposits budget for all users', async () => {
+  const supabase = createSupabaseStub({ user1: 5, user2: 0 });
   const handler = createHandler({
     supabase,
     depositNanoUsd: 10,
+    maxAccruedNanoUsd: 100,
     serviceRoleKey: 'svc',
   });
   const res = await handler(
     new Request('http://localhost', {
       method: 'POST',
       headers: { authorization: 'Bearer svc' },
-      body: JSON.stringify({ user_id: 'u1' }),
     })
   );
   assertEquals(res.status, 200);
   const body = await res.json();
-  assertEquals(body.new_balance, 15);
-  assertEquals(supabase.state.budget, 15);
+  assertEquals(body.deposited_amount, 10);
+  assertEquals(body.max_budget, 100);
+  assertEquals(body.users_processed, 2);
+  assertEquals(supabase.state.budgets['user1'], 15);
+  assertEquals(supabase.state.budgets['user2'], 10);
+});
+
+test('respects budget cap', async () => {
+  const supabase = createSupabaseStub({ user1: 95 });
+  const handler = createHandler({
+    supabase,
+    depositNanoUsd: 10,
+    maxAccruedNanoUsd: 100,
+    serviceRoleKey: 'svc',
+  });
+  const res = await handler(
+    new Request('http://localhost', {
+      method: 'POST',
+      headers: { authorization: 'Bearer svc' },
+    })
+  );
+  assertEquals(res.status, 200);
+  assertEquals(supabase.state.budgets['user1'], 100); // Capped at max
 });
