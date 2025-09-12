@@ -1,10 +1,11 @@
 // deno-lint-ignore-file no-explicit-any
 import {
-  extractDeduplicatedTasks,
-  replaceTasksAndUpdateEmail,
+  extractNewTasks,
+  addNewTasksAndUpdateEmail,
   chooseEmailText,
-  INPUT_NANO_USD_PER_TOKEN,
-  OUTPUT_NANO_USD_PER_TOKEN,
+  getOpenTasksForDeduplication,
+  getUserProcessingBudget,
+  decrementProcessingBudget,
 } from '../_shared/task-utils.ts';
 
 type InboundPayload = {
@@ -213,41 +214,20 @@ export function createHandler({
         `[inbound-email] user=${user_id} email_text_length=${emailText.length}`
       );
 
-      // Only get open tasks that are future or have no due date
-      const now = new Date().toISOString();
-      const { data: existingRaw, error: existingError } = await supabase
-        .from('user_tasks')
-        .select('*')
-        .eq('user_id', user_id)
-        .eq('state', 'OPEN')
-        .or(`due_date.is.null,due_date.gte.${now}`);
+      const { tasks: existingForAi, error: existingError } =
+        await getOpenTasksForDeduplication(supabase, user_id);
+      if (existingError) return new Response(existingError, { status: 500 });
 
-      if (existingError)
-        return new Response(existingError.message, { status: 500 });
-
-      const existingRows = Array.isArray(existingRaw) ? existingRaw : [];
-      const existingCount = existingRows.length;
+      const existingCount = existingForAi.length;
       console.info(
         `[inbound-email] user=${user_id} existing_tasks_for_dedupe=${existingCount}`
       );
 
-      const existingForAi = existingRows.map((t: any) => ({
-        title: t.title,
-        description: t.description ?? null,
-        due_date: t.due_date ?? null,
-        parent_action: t.parent_action ?? null,
-        parent_requirement_level: t.parent_requirement_level ?? null,
-        student_action: t.student_action ?? null,
-        student_requirement_level: t.student_requirement_level ?? null,
-      }));
-      const { data: budgetRow, error: budgetError } = await supabase
-        .from('processing_budgets')
-        .select('remaining_nano_usd')
-        .eq('user_id', user_id)
-        .single();
-      const remainingBudget = budgetError ? 0 : budgetRow.remaining_nano_usd;
+      const { budget: remainingBudget, error: budgetError } =
+        await getUserProcessingBudget(supabase, user_id);
+      const actualRemainingBudget = budgetError ? 0 : remainingBudget;
 
-      if (remainingBudget <= 0) {
+      if (actualRemainingBudget <= 0) {
         const { error: rawError } = await supabase.from('raw_emails').insert({
           user_id,
           from_email: payload.From ?? null,
@@ -290,49 +270,50 @@ export function createHandler({
 
       if (rawError) return new Response(rawError.message, { status: 500 });
 
-      const { tasks, promptTokens, completionTokens, rawContent } =
-        await extractDeduplicatedTasks(
-          supabase,
-          fetch,
-          openAiApiKey,
-          emailText,
-          existingForAi,
-          user_id,
-          rawData.id
-        );
-      console.info(
-        `[inbound-email] user=${user_id} deduped_tasks=${tasks.length}`
+      const {
+        tasks,
+        promptTokens,
+        completionTokens,
+        totalCostNano,
+        rawContent,
+      } = await extractNewTasks(
+        supabase,
+        fetch,
+        openAiApiKey,
+        emailText,
+        existingForAi,
+        user_id,
+        rawData.id
       );
+      console.info(`[inbound-email] user=${user_id} new_tasks=${tasks.length}`);
 
-      const applyResult = await replaceTasksAndUpdateEmail({
+      const applyResult = await addNewTasksAndUpdateEmail({
         supabase,
         userId: user_id,
         rawEmailId: rawData.id,
-        tasks,
-        existingRows,
-        promptTokens,
-        completionTokens,
+        newTasks: tasks,
+        existingTasksCount: existingCount,
+        _promptTokens: promptTokens,
+        _completionTokens: completionTokens,
         rawContent,
         logPrefix: 'inbound-email',
       });
       if (!applyResult.success)
         return new Response(applyResult.error, { status: 500 });
 
-      const totalCost =
-        promptTokens * INPUT_NANO_USD_PER_TOKEN +
-        completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
       // Atomically decrement the remaining budget using database function
-      const { data: _budgetResult, error: budgetUpdateError } =
-        await supabase.rpc('decrement_processing_budget', {
-          p_user_id: user_id,
-          p_amount: totalCost,
-        });
+      const { error: budgetUpdateError } = await decrementProcessingBudget(
+        supabase,
+        user_id,
+        totalCostNano,
+        'inbound-email'
+      );
 
       if (budgetUpdateError) {
         console.error(
-          `[inbound-email] Budget update error: ${budgetUpdateError.message}`
+          `[inbound-email] Budget update error: ${budgetUpdateError}`
         );
-        return new Response(budgetUpdateError.message, { status: 500 });
+        return new Response(budgetUpdateError, { status: 500 });
       }
 
       return new Response(

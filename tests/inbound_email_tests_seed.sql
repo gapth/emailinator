@@ -129,12 +129,11 @@ INSERT INTO "auth"."refresh_tokens" ("instance_id", "id", "token", "user_id", "r
 INSERT INTO "public"."ai_prompt_config" ("id", "is_active", "model", "prompt", "temperature", "top_p", "seed", "input_cost_nano_per_token", "output_cost_nano_per_token", "cost_currency", "created_at") VALUES
 	('6105a9ba-4a5d-43eb-a32b-695648cfb7e5', true, 'gpt-4.1-mini', 'You are a careful assistant for a busy parent.
 You are given an existing list of tasks and a new email.
-Combine the existing tasks with any tasks found in the email, merging entries that describe the same activity.
-Return the full deduplicated list of tasks.
+Extract ONLY NEW tasks from the email that are NOT duplicates of the existing tasks.
+Do not include any existing tasks in your response - only return genuinely new actionable items.
 Only include actionable items (forms, payments, events, purchases, transport, volunteering).
 If an event requires attire, do not create a separate task for clothing; note attire inside `description`.
-Return only valid JSON that conforms to the provided JSON Schema. No prose.
-', NULL, NULL, NULL, 400, 1600, 'USD', '2025-09-06 03:20:05.136323+00');
+Return only valid JSON that conforms to the provided JSON Schema. No prose.', NULL, NULL, NULL, 400, 1600, 'USD', '2025-09-06 03:20:05.136323+00');
 
 
 --
@@ -170,7 +169,7 @@ INSERT INTO "public"."preferences" ("user_id", "parent_requirement_levels", "ove
 --
 
 INSERT INTO "public"."processing_budgets" ("user_id", "remaining_nano_usd", "inserted_at", "updated_at") VALUES
-	('be3cadf5-f4c3-4392-82d4-9af2c99217f8', 10000000, '2025-09-06 03:13:41.024141+00', '2025-09-06 22:58:34.440565+00');
+	('be3cadf5-f4c3-4392-82d4-9af2c99217f8', 100000000, '2025-09-06 03:13:41.024141+00', '2025-09-09 05:41:52.419603+00');
 
 
 --
