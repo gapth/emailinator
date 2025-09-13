@@ -41,8 +41,10 @@ test('processes UNPROCESSED raw emails', async () => {
     })
   );
   assertEquals(res.status, 200);
-  assertEquals(supabase.state.tasks.length, 1);
-  assertEquals(supabase.state.tasks[0].title, 'New');
+  assertEquals(supabase.state.tasks.length, 2); // Keep existing + add new
+  const titles = supabase.state.tasks.map((t) => t.title).sort();
+  assert(titles.includes('Old')); // Existing task should remain
+  assert(titles.includes('New')); // New task should be added
   assertEquals(supabase.state.raw_emails[0].status, 'UPDATED_TASKS');
   const body = await res.json();
   assertEquals(body.processed, 1);

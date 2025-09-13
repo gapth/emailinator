@@ -116,6 +116,7 @@ class _TaskListItemState extends State<TaskListItem> {
           dismissedAt:
               newState == 'DISMISSED' ? DateProvider.now() : task.dismissedAt,
           snoozedUntil: newState == 'SNOOZED' ? snoozedUntil : null,
+          sentAt: task.sentAt,
         );
 
         // Add the updated task to the appropriate list
@@ -284,7 +285,10 @@ class _TaskListItemState extends State<TaskListItem> {
           addSection(
               task.dueDate != null ? 'Due:' : 'Due?:',
               task.dueDate?.toIso8601String().substring(0, 10) ??
-                  task.createdAt.toIso8601String().substring(0, 10)),
+                  task
+                      .getEffectiveDueDate()
+                      .toIso8601String()
+                      .substring(0, 10)),
           // Add status info if task is completed/dismissed/snoozed
           if (task.state != null && task.state != 'OPEN') ...[
             const SizedBox(height: 8),
@@ -426,7 +430,8 @@ class _TaskListItemState extends State<TaskListItem> {
                 if (task.dueDate != null)
                   Text('Due: ${task.dueDate.toString().substring(0, 10)}')
                 else
-                  Text('Due?: ${task.createdAt.toString().substring(0, 10)}'),
+                  Text(
+                      'Due?: ${task.getEffectiveDueDate().toString().substring(0, 10)}'),
                 if (task.parentRequirementLevel != null)
                   Text('Parent requirement: ${task.parentRequirementLevel}'),
                 if (task.state == 'SNOOZED' && task.snoozedUntil != null)

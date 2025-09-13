@@ -1,12 +1,14 @@
 import {
-  extractDeduplicatedTasks,
-  replaceTasksAndUpdateEmail,
+  extractNewTasks,
+  addNewTasksAndUpdateEmail,
   chooseEmailText,
-  INPUT_NANO_USD_PER_TOKEN,
-  OUTPUT_NANO_USD_PER_TOKEN,
+  getOpenTasksForDeduplication,
+  getUserProcessingBudget,
+  decrementProcessingBudget,
 } from '../_shared/task-utils.ts';
 
 export interface Deps {
+  // deno-lint-ignore no-explicit-any
   supabase: any;
   fetch: typeof fetch;
   openAiApiKey: string;
@@ -35,77 +37,61 @@ export function createHandler({
     if (error) return new Response(error.message, { status: 500 });
 
     let processed = 0;
+    // deno-lint-ignore no-explicit-any
     for (const raw of raws as any[]) {
       try {
         const user_id = raw.user_id;
         const emailText = chooseEmailText(raw);
 
-        const { data: budgetRow, error: budgetError } = await supabase
-          .from('processing_budgets')
-          .select('remaining_nano_usd')
-          .eq('user_id', user_id)
-          .single();
-        const remainingBudget = budgetError ? 0 : budgetRow.remaining_nano_usd;
-        if (remainingBudget <= 0) continue;
+        const { budget: remainingBudget, error: budgetError } =
+          await getUserProcessingBudget(supabase, user_id);
+        if (budgetError || remainingBudget <= 0) continue;
 
-        const { data: existingRaw, error: existingError } = await supabase
-          .from('user_tasks')
-          .select('*')
-          .eq('user_id', user_id)
-          .eq('state', 'OPEN');
+        const { tasks: existingForAi, error: existingError } =
+          await getOpenTasksForDeduplication(supabase, user_id);
         if (existingError) continue;
 
-        const existingRows = Array.isArray(existingRaw) ? existingRaw : [];
-        const existingForAi = existingRows.map((t: any) => ({
-          title: t.title,
-          description: t.description ?? null,
-          due_date: t.due_date ?? null,
-          parent_action: t.parent_action ?? null,
-          parent_requirement_level: t.parent_requirement_level ?? null,
-          student_action: t.student_action ?? null,
-          student_requirement_level: t.student_requirement_level ?? null,
-        }));
+        const {
+          tasks,
+          promptTokens,
+          completionTokens,
+          totalCostNano,
+          rawContent,
+        } = await extractNewTasks(
+          supabase,
+          fetch,
+          openAiApiKey,
+          emailText,
+          existingForAi,
+          user_id,
+          raw.id
+        );
 
-        const { tasks, promptTokens, completionTokens, rawContent } =
-          await extractDeduplicatedTasks(
-            supabase,
-            fetch,
-            openAiApiKey,
-            emailText,
-            existingForAi,
-            user_id,
-            raw.id
-          );
-
-        const result = await replaceTasksAndUpdateEmail({
+        const result = await addNewTasksAndUpdateEmail({
           supabase,
           userId: user_id,
           rawEmailId: raw.id,
-          tasks,
-          existingRows,
-          promptTokens,
-          completionTokens,
+          newTasks: tasks,
+          existingTasksCount: existingForAi.length,
+          _promptTokens: promptTokens,
+          _completionTokens: completionTokens,
           rawContent,
           logPrefix: 'reprocess-unprocessed',
         });
         if (result.success) {
           processed++;
-          const totalCost =
-            promptTokens * INPUT_NANO_USD_PER_TOKEN +
-            completionTokens * OUTPUT_NANO_USD_PER_TOKEN;
 
           // Atomically decrement the remaining budget using database function
-          const { error: budgetUpdateError } = await supabase.rpc(
-            'decrement_processing_budget',
-            {
-              p_user_id: user_id,
-              p_amount: totalCost,
-            }
+          const { error: budgetUpdateError } = await decrementProcessingBudget(
+            supabase,
+            user_id,
+            totalCostNano,
+            'reprocess-unprocessed'
           );
 
           if (budgetUpdateError) {
             console.error(
-              `[reprocess-unprocessed] Budget update error for user ${user_id}: ${budgetUpdateError.message}`
+              `[reprocess-unprocessed] Budget update error for user ${user_id}: ${budgetUpdateError}`
             );
           }
         }

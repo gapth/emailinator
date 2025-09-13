@@ -146,10 +146,12 @@ test('passes existing tasks and stores new set', async () => {
   const res = await handler(makeReq({ TextBody: 'email' }));
   assertEquals(res.status, 200);
   assert(fetchStub.calls[0].init.body.includes('Old Task'));
-  assertEquals(supabase.state.tasks.length, 1);
-  assertEquals(supabase.state.tasks[0].title, 'New Task');
+  assertEquals(supabase.state.tasks.length, 2); // Keep existing + add new
+  const titles = supabase.state.tasks.map((t) => t.title).sort();
+  assert(titles.includes('Old Task')); // Existing task should remain
+  assert(titles.includes('New Task')); // New task should be added
   assertEquals(supabase.state.raw_emails[0].status, 'UPDATED_TASKS');
-  assertEquals(supabase.state.raw_emails[0].tasks_after, 1);
+  assertEquals(supabase.state.raw_emails[0].tasks_after, 2); // Total count
 });
 
 test('keeps DB unchanged if extraction fails', async () => {
@@ -229,8 +231,9 @@ test('handles zero tasks correctly', async () => {
   const res = await handler(makeReq({ TextBody: 'email' }));
   assertEquals(res.status, 200);
   const body = await res.json();
-  assertEquals(body.task_count, 0);
-  assertEquals(supabase.state.tasks.length, 0);
+  assertEquals(body.task_count, 0); // No new tasks added
+  assertEquals(supabase.state.tasks.length, 1); // Existing task remains
+  assertEquals(supabase.state.tasks[0].title, 'Old'); // Verify existing task is preserved
 });
 
 test('detects duplicate emails by Message-ID', async () => {
@@ -284,15 +287,15 @@ test('only open tasks are deduped', async () => {
   const res = await handler(makeReq({ TextBody: 'email' }));
   assertEquals(res.status, 200);
   const body = fetchStub.calls[0].init.body;
-  assert(body.includes('Open'));
-  assert(!body.includes('Completed'));
+  assert(body.includes('Open')); // Open task should be passed to AI for deduplication
+  assert(!body.includes('Completed')); // Completed task should not be passed to AI
   const titles = supabase.state.tasks.map((t) => t.title).sort();
-  assert(titles.includes('Completed'));
-  assert(titles.includes('New'));
-  assert(!titles.includes('Open'));
+  assert(titles.includes('Completed')); // Completed task should remain
+  assert(titles.includes('New')); // New task should be added
+  assert(titles.includes('Open')); // Open task should remain (not deleted)
 });
 
-test('only future or no-due-date open tasks are fetched for deduplication', async () => {
+test('all open tasks are fetched for deduplication', async () => {
   // Mock the current time
   const mockNow = '2025-01-01T12:00:00.000Z';
   const originalToISOString = Date.prototype.toISOString;
@@ -334,28 +337,31 @@ test('only future or no-due-date open tasks are fetched for deduplication', asyn
   const supabase = createSupabaseStub(existing);
   const fetchStub = createFetchStub([{ title: 'New task' }]);
 
-  // Track which tasks were queried by intercepting the .or() call
-  const queriedTasks: any[] = [];
+  // Track which tasks were queried by intercepting the query to tasks table
+  const queriedTasks: Record<string, unknown>[] = [];
   const originalFrom = supabase.from;
   supabase.from = function (table: string) {
     const result = originalFrom.call(this, table);
-    if (table === 'user_tasks' && result.select) {
+    if (table === 'tasks' && result.select) {
       const originalSelect = result.select;
-      result.select = function (fields: string) {
+      result.select = function (fields?: string) {
         const selectResult = originalSelect.call(this, fields);
-        // Mock the filtered result to only include future/null due date tasks
-        if (selectResult.or) {
-          const originalOr = selectResult.or;
-          selectResult.or = function (condition: string) {
-            // Simulate the database filtering: only return tasks that match our criteria
-            const filtered = existing.filter(
-              (task) =>
-                task.state === 'OPEN' &&
-                (task.due_date === null ||
-                  task.due_date >= mockNow.split('T')[0])
+        // Override the result to capture all tasks, then filter for open ones
+        if (selectResult.then) {
+          const originalThen = selectResult.then;
+          selectResult.then = function (resolve: any) {
+            // Return all tasks with mock user_task_states
+            const tasksWithState = existing.map((task) => ({
+              ...task,
+              user_task_states: [{ state: task.state || 'OPEN' }],
+            }));
+            // The actual code will filter these for OPEN state
+            queriedTasks.push(
+              ...tasksWithState.filter(
+                (t) => (t.user_task_states[0]?.state || 'OPEN') === 'OPEN'
+              )
             );
-            queriedTasks.push(...filtered);
-            return { data: filtered, error: null };
+            return resolve({ data: tasksWithState, error: null });
           };
         }
         return selectResult;
@@ -369,12 +375,12 @@ test('only future or no-due-date open tasks are fetched for deduplication', asyn
 
   assertEquals(res.status, 200);
 
-  // Verify only future and null due date tasks were returned
-  assertEquals(queriedTasks.length, 2);
+  // Verify ALL open tasks were returned (past, future, and null due date)
+  assertEquals(queriedTasks.length, 3);
   const titles = queriedTasks.map((t) => t.title);
+  assert(titles.includes('Past task'), 'Should include past task');
   assert(titles.includes('Future task'), 'Should include future task');
   assert(titles.includes('No due date'), 'Should include null due date task');
-  assert(!titles.includes('Past task'), 'Should not include past task');
   assert(
     !titles.includes('Completed past'),
     'Should not include completed task'

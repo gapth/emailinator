@@ -148,6 +148,47 @@ export function createSupabaseStub(
       }
       if (table === 'tasks') {
         return {
+          select(fields?: string) {
+            const builder: any = {
+              _filters: [] as ((r: any) => boolean)[],
+              eq(field: string, value: any) {
+                builder._filters.push((r: any) => r[field] === value);
+                return builder;
+              },
+              or(condition: string, opts?: { foreignTable?: string }) {
+                // Handle the specific OR condition for open tasks:
+                // 'state.is.null,state.eq.OPEN' with foreignTable: 'user_task_states'
+                if (
+                  opts?.foreignTable === 'user_task_states' &&
+                  condition.includes('state.is.null') &&
+                  condition.includes('state.eq.OPEN')
+                ) {
+                  builder._filters.push((r: any) => {
+                    const taskState =
+                      r.user_task_states?.[0]?.state || r.state || 'OPEN';
+                    return taskState === 'OPEN';
+                  });
+                }
+                return builder;
+              },
+              then(resolve: any) {
+                let data = state.tasks.filter((t) =>
+                  builder._filters.every((f: any) => f(t))
+                );
+
+                // Simulate the join with user_task_states
+                if (fields && fields.includes('user_task_states')) {
+                  data = data.map((task) => ({
+                    ...task,
+                    user_task_states: [{ state: task.state || 'OPEN' }],
+                  }));
+                }
+
+                return resolve({ data, error: null });
+              },
+            };
+            return builder;
+          },
           delete() {
             const builder: any = {
               _filters: [] as ((r: any) => boolean)[],
@@ -307,11 +348,19 @@ export function createSupabaseStub(
         return {
           insert(row: any) {
             const id = Date.now(); // Simple ID generation for tests
+            // Calculate total_cost_nano from input_cost_nano and output_cost_nano
+            const totalCostNano =
+              (row.input_cost_nano || 0) + (row.output_cost_nano || 0);
+            const fullRow = {
+              id,
+              ...row,
+              total_cost_nano: totalCostNano,
+            };
             return {
               select() {
                 return {
                   single() {
-                    return { data: { id, ...row }, error: null };
+                    return { data: fullRow, error: null };
                   },
                 };
               },
@@ -325,7 +374,10 @@ export function createSupabaseStub(
       if (functionName === 'decrement_processing_budget') {
         // Simulate successful budget decrement
         const { p_amount } = params;
-        const newRemaining = state.budget - (p_amount as number);
+        if (typeof p_amount !== 'number' || isNaN(p_amount)) {
+          return { data: null, error: { message: 'Invalid amount' } };
+        }
+        const newRemaining = state.budget - p_amount;
         if (newRemaining < 0) {
           return { data: null, error: { message: 'Insufficient budget' } };
         }

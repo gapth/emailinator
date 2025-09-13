@@ -1,12 +1,14 @@
 export interface Deps {
   supabase: any;
   depositNanoUsd: number;
+  maxAccruedNanoUsd: number;
   serviceRoleKey: string;
 }
 
 export function createHandler({
   supabase,
   depositNanoUsd,
+  maxAccruedNanoUsd,
   serviceRoleKey,
 }: Deps) {
   return async function handler(req: Request): Promise<Response> {
@@ -17,26 +19,42 @@ export function createHandler({
     if (auth !== `Bearer ${serviceRoleKey}`)
       return new Response('Unauthorized', { status: 401 });
 
-    const { user_id } = (await req.json()) as { user_id?: string };
-    if (!user_id) return new Response('user_id required', { status: 400 });
+    // Get all users to deposit budget for everyone
+    const { data: users, error: usersError } =
+      await supabase.auth.admin.listUsers();
+    if (usersError) return new Response(usersError.message, { status: 500 });
 
-    const { data: existing, error } = await supabase
-      .from('processing_budgets')
-      .select('remaining_nano_usd')
-      .eq('user_id', user_id)
-      .single();
+    const results = [];
 
-    const current = error ? 0 : existing.remaining_nano_usd;
-    const newBalance = current + depositNanoUsd;
+    for (const user of users.users) {
+      const { data, error } = await supabase.rpc(
+        'increment_processing_budget',
+        {
+          p_user_id: user.id,
+          p_amount: depositNanoUsd,
+          p_max_budget: maxAccruedNanoUsd,
+        }
+      );
 
-    const { error: upsertError } = await supabase
-      .from('processing_budgets')
-      .upsert({ user_id, remaining_nano_usd: newBalance });
-    if (upsertError) return new Response(upsertError.message, { status: 500 });
+      if (error) {
+        console.error(`Failed to increment budget for user ${user.id}:`, error);
+        results.push({ user_id: user.id, error: error.message });
+      } else {
+        results.push({ user_id: user.id, new_balance: data });
+      }
+    }
 
-    return new Response(JSON.stringify({ new_balance: newBalance }), {
-      headers: { 'content-type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        deposited_amount: depositNanoUsd,
+        max_budget: maxAccruedNanoUsd,
+        users_processed: results.length,
+        results,
+      }),
+      {
+        headers: { 'content-type': 'application/json' },
+      }
+    );
   };
 }
 
@@ -46,9 +64,13 @@ if (import.meta.main) {
   const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
   const depositNanoUsd = Number(Deno.env.get('BUDGET_DEPOSIT_NANO_USD') ?? '0');
+  const maxAccruedNanoUsd = Number(
+    Deno.env.get('BUDGET_MAX_ACCRUED_NANO_USD') ?? '0'
+  );
   const handler = createHandler({
     supabase,
     depositNanoUsd,
+    maxAccruedNanoUsd,
     serviceRoleKey: SERVICE_ROLE,
   });
   Deno.serve(handler);

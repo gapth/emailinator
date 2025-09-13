@@ -1,8 +1,5 @@
-import { runModel, type AIInvocation } from './ai.ts';
+import { runModel } from './ai.ts';
 
-export const MODEL_NAME = 'gpt-4.1-mini';
-export const INPUT_NANO_USD_PER_TOKEN = 400;
-export const OUTPUT_NANO_USD_PER_TOKEN = 1600;
 export const TEXT_BODY_MIN_RATIO_OF_HTML = 0.3; // Use text/plain only if it's at least 30% of the HTML length
 
 export const TASK_SCHEMA = {
@@ -123,6 +120,7 @@ export const STUDENT_ACTIONS = [
   'OTHER',
 ];
 
+// deno-lint-ignore no-explicit-any
 export function sanitizeTasks(raw: any[]): Record<string, unknown>[] {
   return (Array.isArray(raw) ? raw : [])
     .map((t) => {
@@ -162,7 +160,8 @@ export function sanitizeTasks(raw: any[]): Record<string, unknown>[] {
     .filter(Boolean) as Record<string, unknown>[];
 }
 
-export async function extractDeduplicatedTasks(
+export async function extractNewTasks(
+  // deno-lint-ignore no-explicit-any
   supabase: any,
   fetchFn: typeof fetch,
   openAiApiKey: string,
@@ -174,6 +173,7 @@ export async function extractDeduplicatedTasks(
   tasks: Record<string, unknown>[];
   promptTokens: number;
   completionTokens: number;
+  totalCostNano: number;
   rawContent: string;
 }> {
   const userContent = `Existing tasks:\n${JSON.stringify({ tasks: existingTasks })}\n\nEmail:\n${emailText}`;
@@ -184,6 +184,7 @@ export async function extractDeduplicatedTasks(
     fetch: fetchFn,
     openAiApiKey,
     userId,
+    // deno-lint-ignore no-explicit-any
     emailId: (emailId as any) ?? undefined,
     userContent,
     responseFormat,
@@ -193,6 +194,7 @@ export async function extractDeduplicatedTasks(
     `[task-utils] user=${userId} API cost (USD): ${(aiInvocation.total_cost_nano / 1e9).toFixed(6)} (prompt=${aiInvocation.request_tokens}, completion=${aiInvocation.response_tokens})`
   );
 
+  // deno-lint-ignore no-explicit-any
   let parsed: any[] = [];
   try {
     parsed = JSON.parse(content).tasks ?? [];
@@ -204,6 +206,7 @@ export async function extractDeduplicatedTasks(
     tasks,
     promptTokens: aiInvocation.request_tokens,
     completionTokens: aiInvocation.response_tokens,
+    totalCostNano: aiInvocation.total_cost_nano,
     rawContent: content,
   };
 }
@@ -226,44 +229,124 @@ export function chooseEmailText(payload: {
     : html || '';
 }
 
-export async function replaceTasksAndUpdateEmail({
+/**
+ * Get all open tasks for a user for AI deduplication.
+ * Query tasks table directly and join with user_task_states to get state.
+ * Filter for OPEN tasks (includes tasks with no state record, which default to OPEN).
+ * The user_tasks view cannot be used here because it has RLS, but this function
+ * is running with service role, so auth.user_id is not available.
+ */
+export async function getOpenTasksForDeduplication(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string
+): Promise<{ tasks: Record<string, unknown>[]; error?: string }> {
+  const { data: existingRaw, error: existingError } = await supabase
+    .from('tasks')
+    .select(
+      `
+      *,
+      user_task_states!left (
+        state
+      )
+    `
+    )
+    .eq('user_id', userId)
+    .or('state.is.null,state.eq.OPEN', { foreignTable: 'user_task_states' });
+
+  if (existingError) {
+    return { tasks: [], error: existingError.message };
+  }
+
+  const existingRows = Array.isArray(existingRaw) ? existingRaw : [];
+  // deno-lint-ignore no-explicit-any
+  const existingForAi = existingRows.map((t: any) => ({
+    title: t.title,
+    description: t.description ?? null,
+    due_date: t.due_date ?? null,
+    parent_action: t.parent_action ?? null,
+    parent_requirement_level: t.parent_requirement_level ?? null,
+    student_action: t.student_action ?? null,
+    student_requirement_level: t.student_requirement_level ?? null,
+  }));
+
+  return { tasks: existingForAi };
+}
+
+/**
+ * Get the remaining processing budget for a user.
+ */
+export async function getUserProcessingBudget(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string
+): Promise<{ budget: number; error?: string }> {
+  const { data: budgetRow, error: budgetError } = await supabase
+    .from('processing_budgets')
+    .select('remaining_nano_usd')
+    .eq('user_id', userId)
+    .single();
+
+  if (budgetError) {
+    return { budget: 0, error: budgetError.message };
+  }
+
+  return { budget: budgetRow.remaining_nano_usd };
+}
+
+/**
+ * Atomically decrement the processing budget for a user.
+ */
+export async function decrementProcessingBudget(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  amount: number,
+  logPrefix: string
+): Promise<{ success: boolean; error?: string }> {
+  const { error: budgetUpdateError } = await supabase.rpc(
+    'decrement_processing_budget',
+    {
+      p_user_id: userId,
+      p_amount: amount,
+    }
+  );
+
+  if (budgetUpdateError) {
+    console.error(
+      `[${logPrefix}] Budget update error for user ${userId}: ${budgetUpdateError.message}`
+    );
+    return { success: false, error: budgetUpdateError.message };
+  }
+
+  return { success: true };
+}
+
+export async function addNewTasksAndUpdateEmail({
   supabase,
   userId,
   rawEmailId,
-  tasks,
-  existingRows,
-  promptTokens,
-  completionTokens,
+  newTasks,
+  existingTasksCount,
+  _promptTokens,
+  _completionTokens,
   rawContent,
   logPrefix,
 }: {
+  // deno-lint-ignore no-explicit-any
   supabase: any;
   userId: string;
   rawEmailId: string | number;
-  tasks: Record<string, unknown>[];
-  existingRows: any[];
-  promptTokens: number;
-  completionTokens: number;
+  newTasks: Record<string, unknown>[];
+  existingTasksCount: number;
+  _promptTokens: number;
+  _completionTokens: number;
   rawContent: string;
   logPrefix: string;
 }): Promise<{ success: boolean; taskCount: number; error?: string }> {
-  // Delete exactly the tasks that were passed in (more reliable than duplicating query logic)
-  if (existingRows.length > 0) {
-    const existingIds = existingRows
-      .map((row: any) => row.id)
-      .filter((id: any) => id != null);
-    if (existingIds.length > 0) {
-      const { error: delError } = await supabase
-        .from('tasks')
-        .delete()
-        .in('id', existingIds);
-      if (delError)
-        return { success: false, taskCount: 0, error: delError.message };
-    }
-  }
-
-  if (tasks.length > 0) {
-    const rows = tasks.map((t: any) => ({
+  // Only add new tasks - do not delete any existing tasks
+  if (newTasks.length > 0) {
+    const rows = newTasks.map((t: Record<string, unknown>) => ({
       user_id: userId,
       email_id: rawEmailId,
       title: t.title,
@@ -280,19 +363,15 @@ export async function replaceTasksAndUpdateEmail({
       console.error(
         `[${logPrefix}] user=${userId} task_insert_failed: ${insertError.message} openai_response=${rawContent}`
       );
-      // Restore the exact rows that were deleted
-      if (existingRows.length > 0) {
-        const restoreRows = existingRows.map(({ id, ...r }: any) => r);
-        await supabase.from('tasks').insert(restoreRows);
-      }
       return { success: false, taskCount: 0, error: insertError.message };
     }
   }
 
+  const finalTaskCount = existingTasksCount + newTasks.length;
   const { error: updateError } = await supabase
     .from('raw_emails')
     .update({
-      tasks_after: tasks.length,
+      tasks_after: finalTaskCount,
       status: 'UPDATED_TASKS',
     })
     .eq('id', rawEmailId);
@@ -301,18 +380,14 @@ export async function replaceTasksAndUpdateEmail({
     console.error(
       `[${logPrefix}] user=${userId} raw_email_update_failed: ${updateError.message} openai_response=${rawContent}`
     );
-    // Delete the newly inserted tasks and restore the original ones
+    // Delete the newly inserted tasks to rollback
     await supabase
       .from('tasks')
       .delete()
       .eq('user_id', userId)
       .eq('email_id', rawEmailId);
-    if (existingRows.length > 0) {
-      const restoreRows = existingRows.map(({ id, ...r }: any) => r);
-      await supabase.from('tasks').insert(restoreRows);
-    }
     return { success: false, taskCount: 0, error: updateError.message };
   }
 
-  return { success: true, taskCount: tasks.length };
+  return { success: true, taskCount: newTasks.length };
 }

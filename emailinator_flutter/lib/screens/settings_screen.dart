@@ -23,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<RawEmail> _recentEmails = [];
   bool _isLoadingEmails = false;
   DateTime? _forcedToday = DateProvider.forcedToday;
+  double? _processingBudgetUsd;
 
   @override
   void initState() {
@@ -69,6 +70,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     await _loadRecentEmails();
+
+    // Load processing budget for debug mode
+    if (kDebugMode) {
+      final budgetRow = await Supabase.instance.client
+          .from('processing_budgets')
+          .select('remaining_nano_usd')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (budgetRow != null) {
+        final nanoUsd = budgetRow['remaining_nano_usd'] as int?;
+        if (nanoUsd != null) {
+          _processingBudgetUsd =
+              nanoUsd / 1000000000.0; // Convert nano USD to USD
+        }
+      }
+    }
 
     if (mounted) {
       setState(() {});
@@ -227,6 +245,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: _clearDebugDate,
                     )
                   : null,
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report),
+              title: Text(
+                _processingBudgetUsd != null
+                    ? "Debug: processing budget: \$${_processingBudgetUsd!.toStringAsFixed(6)} USD"
+                    : "Debug: processing budget: not available",
+              ),
             ),
           ],
         ],

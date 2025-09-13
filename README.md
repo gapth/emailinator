@@ -71,9 +71,10 @@ curl -i -X POST "$SUPABASE_URL/functions/v1/reprocess-unprocessed" \
 
 Deploy the `deposit-budget` Edge Function and schedule it to run regularly (e.g.
 monthly) with Supabase Cron. Each run deposits a fixed amount of OpenAI API
-budget into the specified user's account.
+budget into all user accounts.
 
 Set the deposit amount via the `BUDGET_DEPOSIT_NANO_USD` environment variable.
+The budget for each user can be accrued up to `BUDGET_MAX_ACCRUED_NANO_USD`.
 
 ```
 supabase functions deploy deposit-budget
@@ -86,9 +87,7 @@ To test locally:
 
 ```bash
 curl -i -X POST "$SUPABASE_URL/functions/v1/deposit-budget" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-  -H 'Content-type: application/json' \
-  -d "{\"user_id\": \"$USER_ID\"}"
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
 ```
 
 ### Dumping and repopulating the local database
