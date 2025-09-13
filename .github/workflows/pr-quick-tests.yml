@@ -40,9 +40,7 @@ jobs:
       - name: Supabase function tests (quick)
         run: |
           # Run tests using npm scripts (faster than starting full Supabase)
-          npm run test:inbound-email
-          npm run test:deposit-budget
-          npm run test:reprocess-unprocessed
+          npm test
 
       - name: Python tests
         run: |

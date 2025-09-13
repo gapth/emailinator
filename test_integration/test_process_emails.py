@@ -1,64 +1,49 @@
 #!/usr/bin/env python3
 """
-Integration tests for inbound email functionality.
+Integration test: submit sample emails to the inbound-email Edge Function.
 
-This test script:
-1. Set required variables in the environment
-2. Runs "supabase db reset" to reset the database
-3. Sends all .eml files in tests/email_data to the supabase inbound-email function
+This single test runs these serialized steps:
+1. Sets required environment variables
+2. Resets local database using a test seed
+3. Sends all .eml files in test_integration/email_data to the inbound-email function
+4. Verifies expected database state
 """
 
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
 import psycopg2
 import pytest
 
 
-class TestInboundEmail:
-    """Integration tests for inbound email processing."""
+class TestProcessEmails:
+    """Submit emails to inbound-email function and assert successful submission."""
 
-    def test_inbound_email_integration(self):
-        """
-        Run the complete inbound email integration test in order:
-        1. Set environment variables
-        2. Reset database
-        3. Send all email files
-
-        If any step fails, the test stops and doesn't continue.
-        """
+    def test_submit_emails(self):
         print("Running inbound email integration test...")
         print("=" * 50)
 
         # Step 1: Set environment variables
         print("1. Setting environment variables...")
         self._set_environment_variables()
-        print("✓ All required environment variables are set")
-        print()
+        print("✓ All required environment variables are set\n")
 
         # Step 2: Reset database
         print("2. Resetting database...")
         self._reset_database()
-        print("✓ Database reset completed successfully")
-        print()
+        print("✓ Database reset completed successfully\n")
 
-        # Step 3: Send email files
+        # Step 3: Send email files; fails with pytest.fail on any error
         print("3. Sending email files...")
         sent_emails_count = self._send_all_eml_files()
-        print("✓ All email files sent successfully")
-        print()
+        print("✓ All email files sent successfully\n")
 
         # Step 4: Verify database state
         print("4. Verifying database state...")
         self._verify_database_state(sent_emails_count)
-        print("✓ Database verification completed successfully")
-        print()
-
-        print("=" * 50)
-        print("✓ All integration test steps completed successfully!")
+        print("✓ Database verification completed successfully\n")
 
     def _set_environment_variables(self):
         """Set the required environment variables for testing."""
@@ -73,89 +58,11 @@ class TestInboundEmail:
         for var_name, var_value in env_vars.items():
             os.environ[var_name] = var_value
 
-    def _reset_database(self):
-        """Reset the local supabase database using test seed data."""
-        # Get paths
-        project_root = Path(__file__).parent.parent
-        supabase_seed_path = project_root / "supabase" / "seed.sql"
-        test_seed_path = project_root / "tests" / "inbound_email_tests_seed.sql"
-        backup_seed_path = project_root / "supabase" / "seed.sql.backup"
-
-        # Check if test seed file exists
-        if not test_seed_path.exists():
-            pytest.fail(f"Test seed file not found: {test_seed_path}")
-
-        original_seed_existed = supabase_seed_path.exists()
-
-        try:
-            # Step 1: Backup existing seed.sql if it exists
-            if original_seed_existed:
-                import shutil
-
-                shutil.copy2(supabase_seed_path, backup_seed_path)
-                print(f"  Backed up existing seed.sql to {backup_seed_path}")
-
-            # Step 2: Copy test seed to supabase/seed.sql
-            import shutil
-
-            shutil.copy2(test_seed_path, supabase_seed_path)
-            print(f"  Replaced seed.sql with test seed from {test_seed_path}")
-
-            # Step 3: Run supabase db reset
-            result = subprocess.run(
-                ["supabase", "db", "reset"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-
-            # Check result but don't fail yet - we need to restore first
-            reset_failed = result.returncode != 0
-            reset_error_info = None
-            if reset_failed:
-                reset_error_info = (
-                    f"supabase db reset failed with return code {result.returncode}\n"
-                    f"stdout: {result.stdout}\n"
-                    f"stderr: {result.stderr}"
-                )
-
-        except subprocess.TimeoutExpired:
-            reset_failed = True
-            reset_error_info = "supabase db reset timed out after 60 seconds"
-        except FileNotFoundError:
-            reset_failed = True
-            reset_error_info = "supabase CLI not found. Please install Supabase CLI."
-        finally:
-            # Step 4: Always restore original seed.sql
-            try:
-                if original_seed_existed and backup_seed_path.exists():
-                    import shutil
-
-                    shutil.move(backup_seed_path, supabase_seed_path)
-                    print(f"  Restored original seed.sql from backup")
-                elif not original_seed_existed and supabase_seed_path.exists():
-                    # Remove the test seed file if no original existed
-                    supabase_seed_path.unlink()
-                    print(f"  Removed test seed.sql (no original existed)")
-
-                # Clean up backup file if it still exists
-                if backup_seed_path.exists():
-                    backup_seed_path.unlink()
-
-            except Exception as restore_error:
-                print(
-                    f"  Warning: Failed to restore original seed.sql: {restore_error}"
-                )
-
-        # Now fail if the reset failed
-        if reset_failed:
-            pytest.fail(reset_error_info)
-
     def _send_all_eml_files(self):
-        """Send all .eml files in tests/email_data to supabase."""
+        """Send all .eml files in test_integration/email_data to supabase."""
         # Get the project root directory
         project_root = Path(__file__).parent.parent
-        email_data_dir = project_root / "tests" / "email_data"
+        email_data_dir = project_root / "test_integration" / "email_data"
 
         if not email_data_dir.exists():
             pytest.fail(f"Email data directory not found: {email_data_dir}")
@@ -232,8 +139,13 @@ class TestInboundEmail:
         if failed_sends:
             error_details = "\n".join(
                 [
-                    f"- {fail['file']}: {fail.get('error', f'Return code {fail.get('return_code')}')} "
-                    f"{fail.get('stderr', '')}"
+                    f"- {fail.get('file')}: "
+                    + (
+                        fail.get('error')
+                        if fail.get('error')
+                        else f"Return code {fail.get('return_code')}"
+                    )
+                    + (f" {fail.get('stderr', '')}" if fail.get('stderr') else "")
                     for fail in failed_sends
                 ]
             )
@@ -241,10 +153,79 @@ class TestInboundEmail:
 
         return successful_sends
 
+    def _reset_database(self):
+        """Reset the local supabase database using test seed data."""
+        project_root = Path(__file__).parent.parent
+        supabase_seed_path = project_root / "supabase" / "seed.sql"
+        test_seed_path = project_root / "test_integration" / "inbound_email_tests_seed.sql"
+        backup_seed_path = project_root / "supabase" / "seed.sql.backup"
+
+        if not test_seed_path.exists():
+            pytest.fail(f"Test seed file not found: {test_seed_path}")
+
+        original_seed_existed = supabase_seed_path.exists()
+
+        try:
+            # Backup existing seed.sql if it exists
+            if original_seed_existed:
+                import shutil
+
+                shutil.copy2(supabase_seed_path, backup_seed_path)
+                print(f"  Backed up existing seed.sql to {backup_seed_path}")
+
+            # Replace seed.sql with test seed
+            import shutil
+
+            shutil.copy2(test_seed_path, supabase_seed_path)
+            print(f"  Replaced seed.sql with test seed from {test_seed_path}")
+
+            # Run supabase db reset
+            result = subprocess.run(
+                ["supabase", "db", "reset"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+
+            reset_failed = result.returncode != 0
+            reset_error_info = None
+            if reset_failed:
+                reset_error_info = (
+                    f"supabase db reset failed with return code {result.returncode}\n"
+                    f"stdout: {result.stdout}\n"
+                    f"stderr: {result.stderr}"
+                )
+
+        except subprocess.TimeoutExpired:
+            reset_failed = True
+            reset_error_info = "supabase db reset timed out after 60 seconds"
+        except FileNotFoundError:
+            reset_failed = True
+            reset_error_info = "supabase CLI not found. Please install Supabase CLI."
+        finally:
+            # Restore original seed.sql
+            try:
+                if original_seed_existed and backup_seed_path.exists():
+                    import shutil
+
+                    shutil.move(backup_seed_path, supabase_seed_path)
+                    print("  Restored original seed.sql from backup")
+                elif not original_seed_existed and supabase_seed_path.exists():
+                    supabase_seed_path.unlink()
+                    print("  Removed test seed.sql (no original existed)")
+
+                if backup_seed_path.exists():
+                    backup_seed_path.unlink()
+
+            except Exception as restore_error:
+                print(f"  Warning: Failed to restore original seed.sql: {restore_error}")
+
+        if reset_failed:
+            pytest.fail(reset_error_info)
+
     def _verify_database_state(self, expected_email_count):
         """Verify that the database has been updated correctly after processing emails."""
         try:
-            # Connect to the local Supabase database using psycopg2
             conn = psycopg2.connect(
                 user="postgres",
                 password="postgres",
@@ -272,7 +253,6 @@ class TestInboundEmail:
             cursor.close()
             conn.close()
 
-            # Verify the counts
             verification_errors = []
 
             if raw_emails_count != expected_email_count:
@@ -308,24 +288,3 @@ class TestInboundEmail:
             pytest.fail(f"Database connection/query failed: {e}")
         except Exception as e:
             pytest.fail(f"Database verification failed with error: {e}")
-
-
-def run_integration_tests():
-    """Run the integration tests as a standalone script."""
-    # Change to the project root directory
-    project_root = Path(__file__).parent.parent
-    os.chdir(project_root)
-
-    test_instance = TestInboundEmail()
-
-    try:
-        # Run the complete integration test
-        test_instance.test_inbound_email_integration()
-
-    except Exception as e:
-        print(f"✗ Test failed: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    run_integration_tests()

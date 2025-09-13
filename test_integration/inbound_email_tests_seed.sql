@@ -270,3 +270,4 @@ SELECT pg_catalog.setval('"supabase_functions"."hooks_id_seq"', 1, false);
 --
 
 RESET ALL;
+-- moved to test_integration directory

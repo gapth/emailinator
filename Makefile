@@ -6,7 +6,7 @@ STAMP := $(VENV)/.requirements.stamp
 # Default target: run tests
 default: test
 
-.PHONY: venv install test test-python test-flutter test-npm test-inbound-email clean
+.PHONY: venv install test test-tools test-flutter test-npm test-integration clean
 
 # Create virtual environment if it doesn't exist
 venv:
@@ -24,17 +24,18 @@ $(STAMP): requirements.txt | $(VENV)/bin/activate
 
 install: venv $(STAMP)
 
-# Run all tests: Python (pytest), Flutter, and npm (supabase)
-test: install test-python test-flutter test-npm
+# Run all tests: tools Python tests, Flutter, and npm (supabase)
+test: install test-tools test-flutter test-npm
 
-# Run Python tests with pytest
-test-python: install
+
+# Run Python tests for tools/ only
+test-tools: install
 	@echo "Running Python tests..."
 	$(ACTIVATE) && \
 	if [ "$(TESTS)" != "" ]; then \
-	        pytest -s $(foreach t,$(TESTS),tests/$(t).py) || true; \
+	        pytest -s $(foreach t,$(TESTS),tools/$(t).py) || true; \
 	else \
-	        pytest -s || true; \
+	        pytest -s tools/ || true; \
 	fi
 
 # Run Flutter tests
@@ -47,10 +48,10 @@ test-npm:
 	@echo "Running npm/supabase tests..."
 	npm test
 
-# Run inbound email integration tests
-test-inbound-email: install
-	@echo "Running inbound email integration tests..."
-	$(ACTIVATE) && pytest -s tests/inbound_email_tests.py::TestInboundEmail::test_inbound_email_integration -v
+# Run all Integration tests
+test-integration: install
+	@echo "Running Integration tests..."
+	$(ACTIVATE) && pytest -s test_integration/ -v
 
 # Remove virtual environment and cache files
 clean:

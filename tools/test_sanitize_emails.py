@@ -5,17 +5,12 @@ Tests for the sanitize_emails.py functionality.
 
 import base64
 import email
-import sys
-from pathlib import Path
 
-# Add the tools directory to the Python path
-sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
-
-from sanitize_emails import (
-    sanitize_email,
+from tools.sanitize_emails import (
+    replace_blocked_words,
     replace_email_addresses,
     replace_http_links,
-    replace_blocked_words,
+    sanitize_email,
 )
 
 

@@ -27,52 +27,38 @@ INBOUND_EMAIL_DOMAIN="in.emailinator.app"
 
 These can be set in your `supabase/functions/.env` file (not in Git):
 
-#### Running the Tests
+#### Running Integration Tests
 
-You can run the inbound email integration tests in several ways:
+You can run the integration tests in several ways:
 
 **Option 1: Using Make**
 
 ```bash
-make test-inbound-email
+make test-integration
 ```
 
 **Option 2: Running with pytest directly**
 
 ```bash
 source .venv/bin/activate
-pytest -s tests/inbound_email_tests.py::TestInboundEmail::test_inbound_email_integration -v
+pytest -s test_integration -v
 ```
 
-**Option 3: Running as a Python script**
-
-```bash
-source .venv/bin/activate
-python tests/inbound_email_tests.py
-```
+The integration tests are designed to run under pytest only.
 
 #### What the Tests Do
 
-The integration test runs the following steps **in sequence**, and stops if any
-step fails:
+The integration test performs the following:
 
-1. **Environment Variable Setup**: Automatically sets all required environment
-   variables for the test execution
-2. **Database Reset**: Runs `supabase db reset` to ensure a clean local database
-   state
-3. **Email Processing**: Sends all `.eml` files in `tests/email_data/` to the
+1. **Environment Variable Setup**: Automatically sets all required environment variables
+2. **Email Submission**: Sends all `.eml` files in `test_integration/email_data/` to the
    Supabase inbound-email function using the `send_to_supabase` tool
 
 If any step fails, the subsequent steps are not executed.
 
 #### Test Data
 
-The test uses a custom seed file `tests/inbound_email_tests_seed.sql` which
-contains setup for a test user, their forward alias, and processing budget of
-1c. This seed file is temporarily used during the database reset to ensure
-consistent test conditions.
-
-The test uses email files located in `tests/email_data/`. These are real email
+The test uses email files located in `test_integration/email_data/`. These are real email
 files in `.eml` format that represent various types of emails that the system
 should be able to process.
 
@@ -89,11 +75,7 @@ The tests provide detailed output showing:
 
 **Local Supabase Not Running**
 
-```
-✗ supabase db reset failed with return code 1
-```
-
-Solution: Start your local Supabase development server with `supabase start`.
+Ensure your local Supabase development server is running with `supabase start`.
 
 **Edge Function Environment Variables Not Set**
 
@@ -102,20 +84,13 @@ variables set in `supabase/functions/.env.local`.
 
 **Supabase CLI Not Found**
 
-```
-✗ Supabase CLI not found. Please install Supabase CLI.
-```
-
-Solution: Install the Supabase CLI following the
+Install the Supabase CLI following the
 [official documentation](https://supabase.com/docs/guides/cli).
 
-**Database Reset Timeout**
+**Edge Function Errors**
 
-```
-✗ Database reset failed or timed out
-```
-
-Solution: Check your Supabase project status and network connection.
+If submissions fail, check the inbound-email function logs and verify required
+environment variables.
 
 **Email Sending Failures**
 

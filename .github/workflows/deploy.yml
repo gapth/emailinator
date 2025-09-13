@@ -70,7 +70,7 @@ jobs:
       - name: Run Python tests
         run: |
           source .venv/bin/activate
-          if [ -d "tests" ] && [ "$(find tests -name '*.py' | head -1)" ]; then
+          if [ "$(find tools -maxdepth 1 \( -name 'test_*.py' -o -name '*_test.py' \) | head -1)" ]; then
             echo "Running Python tests..."
             pytest -s
           else
