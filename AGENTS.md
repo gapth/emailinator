@@ -1,4 +1,4 @@
-# Copilot Instructions for Emailinator
+# AI Agent Instructions for Emailinator
 
 ## Repository Overview
 
