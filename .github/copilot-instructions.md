@@ -139,10 +139,10 @@ cd emailinator_flutter
 # Web (requires .env.local.json)
 flutter run -d chrome --dart-define-from-file=.env.local.json
 
-# iOS Simulator
+# iOS Simulator (must be started first from Xcode or command line)
 flutter run --dart-define-from-file=.env.local.json
 
-# Android
+# Android (must start Android Emulator from Android Studio first)
 flutter run --dart-define-from-file=.env.local.json
 ```
 
