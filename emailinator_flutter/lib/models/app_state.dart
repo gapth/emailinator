@@ -212,6 +212,7 @@ class AppState extends ChangeNotifier {
               completedAt: task.completedAt,
               dismissedAt: task.dismissedAt,
               snoozedUntil: null,
+              sentAt: task.sentAt,
             );
           }
         }
@@ -219,7 +220,7 @@ class AppState extends ChangeNotifier {
 
       // Filter in memory to apply grace period logic for tasks with no due date
       _overdueTasks = overdueCandidates.where((task) {
-        final effectiveDueDate = task.dueDate ?? task.createdAt;
+        final effectiveDueDate = task.getEffectiveDueDate();
         final taskDay = DateTime(effectiveDueDate.year, effectiveDueDate.month,
             effectiveDueDate.day);
 
@@ -291,6 +292,7 @@ class AppState extends ChangeNotifier {
               completedAt: task.completedAt,
               dismissedAt: task.dismissedAt,
               snoozedUntil: null,
+              sentAt: task.sentAt,
             );
           }
         }
@@ -298,7 +300,7 @@ class AppState extends ChangeNotifier {
 
       // Filter to only include tasks due within the upcoming period
       _upcomingTasks = upcomingCandidates.where((task) {
-        final effectiveDueDate = task.dueDate ?? task.createdAt;
+        final effectiveDueDate = task.getEffectiveDueDate();
         final taskDay = DateTime(effectiveDueDate.year, effectiveDueDate.month,
             effectiveDueDate.day);
 
@@ -437,7 +439,7 @@ class AppState extends ChangeNotifier {
         _snoozedTasks.add(task);
       } else {
         // Snoozed date is today or has passed, treat as OPEN task
-        final effectiveDueDate = task.dueDate ?? task.createdAt;
+        final effectiveDueDate = task.getEffectiveDueDate();
         final taskDay = DateTime(effectiveDueDate.year, effectiveDueDate.month,
             effectiveDueDate.day);
 
@@ -456,7 +458,7 @@ class AppState extends ChangeNotifier {
       // For OPEN tasks, add based on date
       final now = DateProvider.now();
       final today = DateTime(now.year, now.month, now.day);
-      final effectiveDueDate = task.dueDate ?? task.createdAt;
+      final effectiveDueDate = task.getEffectiveDueDate();
       final taskDay = DateTime(
           effectiveDueDate.year, effectiveDueDate.month, effectiveDueDate.day);
 

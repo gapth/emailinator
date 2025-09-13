@@ -15,6 +15,7 @@ class Task {
   final DateTime? snoozedUntil;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? sentAt;
 
   const Task({
     required this.id,
@@ -33,6 +34,7 @@ class Task {
     this.snoozedUntil,
     required this.createdAt,
     required this.updatedAt,
+    this.sentAt,
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -60,6 +62,12 @@ class Task {
           : null,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
+      sentAt: json['sent_at'] != null ? DateTime.parse(json['sent_at']) : null,
     );
+  }
+
+  /// Gets the effective due date, prioritizing dueDate, then sentAt, then createdAt
+  DateTime getEffectiveDueDate() {
+    return dueDate ?? sentAt ?? createdAt;
   }
 }
