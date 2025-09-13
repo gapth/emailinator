@@ -44,12 +44,12 @@ jobs:
           npm run test:deposit-budget
           npm run test:reprocess-unprocessed
 
-      - name: Python lint check
+      - name: Python tests
         run: |
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
           pip install -e .
           pip install -r requirements.txt
-          # Basic import test to ensure no syntax errors
-          python -c "import emailinator; print('Python package imports successfully')"
+          # Run Python tests
+          pytest -s
