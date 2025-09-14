@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:emailinator_flutter/models/raw_email.dart';
 import 'package:emailinator_flutter/utils/date_provider.dart';
@@ -16,9 +14,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  String? _forwardAlias;
-  String? _verificationLink;
-  int? _verificationId;
   String? _userEmail;
   List<RawEmail> _recentEmails = [];
   bool _isLoadingEmails = false;
@@ -36,6 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userEmail = Supabase.instance.client.auth.currentUser!.email;
     _userEmail = userEmail;
 
+    // Ensure user has an alias (create one if needed)
     final aliasRow = await Supabase.instance.client
         .from('email_aliases')
         .select('alias')
@@ -43,9 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .eq('active', true)
         .maybeSingle();
 
-    if (aliasRow != null) {
-      _forwardAlias = aliasRow['alias'];
-    } else {
+    if (aliasRow == null) {
       final uuid = const Uuid().v4().replaceAll('-', '').substring(0, 8);
       final alias = 'u_$uuid@in.emailinator.app';
       await Supabase.instance.client.from('email_aliases').insert({
@@ -53,20 +47,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'alias': alias,
         'active': true,
       });
-      _forwardAlias = alias;
-    }
-
-    final verificationRow = await Supabase.instance.client
-        .from('forwarding_verifications')
-        .select('id, verification_link')
-        .eq('user_id', userId)
-        .isFilter('clicked_at', null)
-        .order('created_at', ascending: false)
-        .maybeSingle();
-
-    if (verificationRow != null) {
-      _verificationId = verificationRow['id'] as int?;
-      _verificationLink = verificationRow['verification_link'] as String?;
     }
 
     await _loadRecentEmails();
@@ -112,25 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isLoadingEmails = false);
   }
 
-  Future<void> _launchVerification() async {
-    if (_verificationLink == null) return;
-    final uri = Uri.parse(_verificationLink!);
-    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (_verificationId != null) {
-        await Supabase.instance.client
-            .from('forwarding_verifications')
-            .update({'clicked_at': DateProvider.now().toIso8601String()}).eq(
-                'id', _verificationId ?? 0);
-      }
-      if (mounted) {
-        setState(() {
-          _verificationLink = null;
-          _verificationId = null;
-        });
-      }
-    }
-  }
-
   Future<void> _pickDebugDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -172,37 +133,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           if (_userEmail != null) const SizedBox(height: 16),
 
-          // 2. Show forward verification if pending
-          if (_verificationLink != null)
-            Card(
-              color: Colors.amber[100],
-              child: ListTile(
-                title: const Text('Forward verification pending'),
-                subtitle:
-                    const Text('Click here to verify the forward address.'),
-                leading: const Icon(Icons.warning),
-                onTap: _launchVerification,
-              ),
-            ),
-          if (_verificationLink != null) const SizedBox(height: 16),
-
-          // 3. Show current "Forward to this address" section
-          if (_forwardAlias != null)
-            ListTile(
-              title: const Text('Forward to this address'),
-              subtitle: Text(_forwardAlias!),
-              leading: const Icon(Icons.forward_to_inbox),
-              trailing: IconButton(
-                icon: const Icon(Icons.copy),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: _forwardAlias ?? ''));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Copied to clipboard')),
-                  );
-                },
-              ),
-            ),
-          if (_forwardAlias != null) const SizedBox(height: 24),
+          // Setup menu item
+          ListTile(
+            title: const Text('Setup'),
+            subtitle: const Text('Set up email forwarding'),
+            leading: const Icon(Icons.settings_outlined),
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () {
+              Navigator.pushNamed(context, '/setup');
+            },
+          ),
+          const SizedBox(height: 16),
 
           // 4. Last 10 Received Emails - Collapsible section
           ExpansionTile(

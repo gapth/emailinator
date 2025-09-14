@@ -42,7 +42,8 @@ class TestProcessEmails:
 
         # Step 4: Verify database state
         print("4. Verifying database state...")
-        self._verify_database_state(sent_emails_count)
+        # One of the emails is a forwarding verification which does not create a raw_emails entry.
+        self._verify_database_state(sent_emails_count - 1)
         print("✓ Database verification completed successfully\n")
 
     def _set_environment_variables(self):
@@ -141,11 +142,11 @@ class TestProcessEmails:
                 [
                     f"- {fail.get('file')}: "
                     + (
-                        fail.get('error')
-                        if fail.get('error')
+                        fail.get("error")
+                        if fail.get("error")
                         else f"Return code {fail.get('return_code')}"
                     )
-                    + (f" {fail.get('stderr', '')}" if fail.get('stderr') else "")
+                    + (f" {fail.get('stderr', '')}" if fail.get("stderr") else "")
                     for fail in failed_sends
                 ]
             )
@@ -157,7 +158,9 @@ class TestProcessEmails:
         """Reset the local supabase database using test seed data."""
         project_root = Path(__file__).parent.parent
         supabase_seed_path = project_root / "supabase" / "seed.sql"
-        test_seed_path = project_root / "test_integration" / "inbound_email_tests_seed.sql"
+        test_seed_path = (
+            project_root / "test_integration" / "inbound_email_tests_seed.sql"
+        )
         backup_seed_path = project_root / "supabase" / "seed.sql.backup"
 
         if not test_seed_path.exists():
@@ -218,7 +221,9 @@ class TestProcessEmails:
                     backup_seed_path.unlink()
 
             except Exception as restore_error:
-                print(f"  Warning: Failed to restore original seed.sql: {restore_error}")
+                print(
+                    f"  Warning: Failed to restore original seed.sql: {restore_error}"
+                )
 
         if reset_failed:
             pytest.fail(reset_error_info)
@@ -250,6 +255,13 @@ class TestProcessEmails:
             cursor.execute("SELECT COUNT(*) FROM tasks;")
             tasks_count = cursor.fetchone()[0]
 
+            # Check forwarding_verifications table for expected verification link
+            cursor.execute(
+                "SELECT COUNT(*) FROM forwarding_verifications WHERE clicked_at IS NULL AND verification_link = %s;",
+                ("https://mail-settings.google.com/mail/abcdefghijkl",),
+            )
+            forwarding_verifications_count = cursor.fetchone()[0]
+
             cursor.close()
             conn.close()
 
@@ -277,6 +289,15 @@ class TestProcessEmails:
                 )
             else:
                 print(f"  ✓ tasks table has {tasks_count} rows")
+
+            if forwarding_verifications_count != 1:
+                verification_errors.append(
+                    f"Expected 1 row in forwarding_verifications with clicked_at=null and verification_link='https://mail-settings.google.com/mail/abcdefghijkl', got {forwarding_verifications_count}"
+                )
+            else:
+                print(
+                    f"  ✓ forwarding_verifications table has 1 row with expected verification link and null clicked_at"
+                )
 
             if verification_errors:
                 pytest.fail(

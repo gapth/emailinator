@@ -1,0 +1,44 @@
+X-Forwarded-To: test_user@gmail.com
+X-Forwarded-For: test@in.emailinator.app test_user@gmail.com
+Delivered-To: test@in.emailinator.app
+Return-Path: <forwarding-noreply@google.com>
+MIME-Version: 1.0
+Date: Sun, 14 Sep 2025 15:30:02 -0700
+Message-ID: <abcdefg@mail.gmail.com>
+Subject: (Gmail Forwarding Confirmation - Receive Mail from test_user@gmail.com
+From: Gmail Team <forwarding-noreply@google.com>
+To: test@in.emailinator.app
+Content-Type: text/plain; charset="UTF-8"
+
+test_user@gmail.com has requested to automatically forward mail to your email
+address test@in.emailinator.app.
+
+To allow test_user@gmail.com to automatically forward mail to your address,
+please click the link below to confirm the request:
+
+https://mail-settings.google.com/mail/abcdefghijkl
+
+If you click the link and it appears to be broken, please copy and paste it
+into a new browser window.
+
+Thanks for using Gmail!
+
+Sincerely,
+
+The Gmail Team
+
+If you do not approve of this request, no further action is required.
+test_user@gmail.com cannot automatically forward messages to your email address
+unless you confirm the request by clicking the link above. If you accidentally
+clicked the link, but you do not want to allow test_user@gmail.com to
+automatically forward messages to your address, click this link to cancel this
+verification:
+https://mail-settings.google.com/mail/abcdefghijkl
+
+To learn more about why you might have received this message, please
+visit: http://support.google.com/mail/bin/answer.py?answer=184973.
+
+Please do not respond to this message. If you'd like to contact the
+Google.com Team, please log in to your account and click 'Help' at
+the top of any page. Then, click 'Contact Us' along the bottom of the
+Help Center.
