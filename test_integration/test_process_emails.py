@@ -159,7 +159,7 @@ class TestProcessEmails:
         project_root = Path(__file__).parent.parent
         supabase_seed_path = project_root / "supabase" / "seed.sql"
         test_seed_path = (
-            project_root / "test_integration" / "inbound_email_tests_seed.sql"
+            project_root / "test_integration" / "seed_prep_for_inbound_email_tests.sql"
         )
         backup_seed_path = project_root / "supabase" / "seed.sql.backup"
 

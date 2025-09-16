@@ -1,5 +1,5 @@
 export interface AIPromptConfig {
-  id: string;
+  id: number;
   is_active: boolean;
   model: string;
   prompt: string;
@@ -12,8 +12,8 @@ export interface AIPromptConfig {
 }
 
 export interface AIInvocation {
-  id: string;
-  config_id: string;
+  id: number;
+  config_id: number;
   user_id: string;
   email_id?: string | null;
   request_tokens: number;
@@ -29,7 +29,7 @@ export async function fetchActivePromptConfig(
   supabase: any
 ): Promise<AIPromptConfig | null> {
   const { data, error } = await supabase
-    .from('ai_prompt_config')
+    .from('ai_prompt_configs')
     .select('*')
     .eq('is_active', true)
     .order('created_at', { ascending: true })

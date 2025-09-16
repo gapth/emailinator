@@ -309,7 +309,7 @@ export function createSupabaseStub(
           },
         };
       }
-      if (table === 'ai_prompt_config') {
+      if (table === 'ai_prompt_configs') {
         return {
           select() {
             const builder: any = {

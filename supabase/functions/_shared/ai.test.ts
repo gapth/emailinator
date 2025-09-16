@@ -21,7 +21,7 @@ function createSupabaseStub(config: AIPromptConfig) {
   return {
     state,
     from(table: string) {
-      if (table === 'ai_prompt_config') {
+      if (table === 'ai_prompt_configs') {
         return {
           select() {
             return {
@@ -48,7 +48,7 @@ function createSupabaseStub(config: AIPromptConfig) {
         return {
           insert(row: any) {
             const inserted: AIInvocation = {
-              id: 'inv-1',
+              id: 1,
               created_at: new Date().toISOString(),
               total_cost_nano: row.input_cost_nano + row.output_cost_nano,
               ...row,
@@ -73,7 +73,7 @@ function createSupabaseStub(config: AIPromptConfig) {
 
 test('runModel returns content and logs invocation', async () => {
   const config: AIPromptConfig = {
-    id: 'cfg-1',
+    id: 1,
     is_active: true,
     model: 'gpt-4',
     prompt: 'You are helpful',
