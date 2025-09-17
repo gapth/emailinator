@@ -7,6 +7,7 @@ export interface SupabaseStubState {
   budget: number;
   aliases: any[];
   forwarding_verifications: any[];
+  source_observations: any[];
 }
 
 export interface SupabaseStubOptions {
@@ -27,6 +28,7 @@ export function createSupabaseStub(
       { alias: 'u_1@in.emailinator.app', user_id: 'user-1', active: true },
     ],
     forwarding_verifications: [] as any[],
+    source_observations: [] as any[],
   };
   let insertAttempts = 0;
   return {
@@ -365,6 +367,56 @@ export function createSupabaseStub(
                 };
               },
             };
+          },
+        };
+      }
+      if (table === 'source_observations') {
+        return {
+          select() {
+            const builder: any = {
+              _filters: [] as ((r: any) => boolean)[],
+              eq(field: string, value: any) {
+                builder._filters.push((r: any) => r[field] === value);
+                return builder;
+              },
+              maybeSingle() {
+                const data = state.source_observations.filter((r) =>
+                  builder._filters.every((f: any) => f(r))
+                );
+                return { data: data[0] ?? null, error: null };
+              },
+            };
+            return builder;
+          },
+          insert(row: any) {
+            const id = state.source_observations.length + 1;
+            const now = new Date().toISOString();
+            const full = {
+              id,
+              msg_first_seen: now,
+              msg_last_seen: now,
+              msg_count: 1,
+              ...row,
+            };
+            state.source_observations.push(full);
+            return { data: { id }, error: null };
+          },
+          update(values: any) {
+            const builder: any = {
+              _updates: values,
+              _filters: [] as ((r: any) => boolean)[],
+              eq(field: string, value: any) {
+                builder._filters.push((r: any) => r[field] === value);
+                return builder;
+              },
+              then(resolve: any) {
+                state.source_observations
+                  .filter((r) => builder._filters.every((f: any) => f(r)))
+                  .forEach((r) => Object.assign(r, builder._updates));
+                return resolve({ data: null, error: null });
+              },
+            };
+            return builder;
           },
         };
       }

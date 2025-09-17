@@ -19,6 +19,7 @@ type InboundPayload = {
   Date?: string;
   MessageID?: string;
   ProviderMeta?: Record<string, any>;
+  Headers?: Array<{ Name?: string; Value?: string }>; // Postmark top-level headers
 
   // Postmark full address arrays
   ToFull?: Array<{ Email: string; Name: string; MailboxHash: string }>;
@@ -69,6 +70,257 @@ export function createHandler({
   allowedIps,
   inboundDomain,
 }: Deps) {
+  // Extract a lowercased email address from a header value like
+  // '"Name" <user@example.com>' or 'user@example.com'
+  function extractEmailAddress(
+    input: string | null | undefined
+  ): string | null {
+    if (!input) return null;
+    const match = input.match(/<([^>]+)>/);
+    const email = (match ? match[1] : input).trim().toLowerCase();
+    return email || null;
+  }
+
+  function domainFromEmail(addr: string | null | undefined): string | null {
+    const email = extractEmailAddress(addr ?? null);
+    if (!email) return null;
+    const atIdx = email.lastIndexOf('@');
+    if (atIdx === -1) return null;
+    const host = email.slice(atIdx + 1).toLowerCase();
+    return host || null;
+  }
+
+  // Very small helper to approximate eTLD+1 by taking the last two labels.
+  // This is not perfect for multi-level TLDs, but is acceptable for common cases.
+  function registrableDomain(host: string | null | undefined): string | null {
+    if (!host) return null;
+    const clean = host.replace(/^www\./i, '').toLowerCase();
+    const parts = clean.split('.').filter(Boolean);
+    if (parts.length <= 2) return parts.join('.') || null;
+    return parts.slice(-2).join('.');
+  }
+
+  function getHeaderMap(payload: any): Map<string, string> {
+    const map = new Map<string, string>();
+    // Prefer Postmark top-level Headers array if present
+    const top = Array.isArray(payload?.Headers) ? payload.Headers : [];
+    const pm = payload?.ProviderMeta;
+    const pmHeaders = Array.isArray(pm?.Headers) ? pm.Headers : [];
+    for (const h of [...top, ...pmHeaders]) {
+      const name = String(h?.Name ?? h?.name ?? '').toLowerCase();
+      const value = String(h?.Value ?? h?.value ?? '');
+      if (name) map.set(name, value);
+    }
+    return map;
+  }
+
+  function getHeaderValues(payload: any, nameLower: string): string[] {
+    const out: string[] = [];
+    const top = Array.isArray(payload?.Headers) ? payload.Headers : [];
+    for (const h of top) {
+      const n = String(h?.Name ?? h?.name ?? '').toLowerCase();
+      if (n === nameLower) out.push(String(h?.Value ?? h?.value ?? ''));
+    }
+    const pm = payload?.ProviderMeta;
+    const pmHeaders = Array.isArray(pm?.Headers) ? pm.Headers : [];
+    for (const h of pmHeaders) {
+      const n = String(h?.Name ?? h?.name ?? '').toLowerCase();
+      if (n === nameLower) out.push(String(h?.Value ?? h?.value ?? ''));
+    }
+    return out;
+  }
+
+  function extractListIdDomain(listIdRaw: string | undefined): string | null {
+    if (!listIdRaw) return null;
+    const inside = listIdRaw.match(/<([^>]+)>/);
+    const token = (inside ? inside[1] : listIdRaw).trim();
+    const domMatch = token.match(/([A-Za-z0-9.-]+\.[A-Za-z]{2,})/);
+    return domMatch ? domMatch[1].toLowerCase() : null;
+  }
+
+  function extractDkimDomain(
+    authResultsList: string[],
+    dkimHeaders: string[],
+    fromDomain: string | null
+  ): string | null {
+    const candidates = new Set<string>();
+    for (const h of dkimHeaders) {
+      const re = /\bd=([^;\s]+)/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(h)) !== null) candidates.add(m[1].toLowerCase());
+    }
+    const passDomains = new Set<string>();
+    for (const ar of authResultsList) {
+      // Capture domains that appear with dkim=pass and header.i or header.d
+      // Examples: 'dkim=pass header.i=@notify.castilleja.org', 'header.d=notify.castilleja.org'
+      const lower = ar.toLowerCase();
+      const segments = lower.split(/;\s*/);
+      for (const seg of segments) {
+        if (seg.includes('dkim=pass')) {
+          const mI = seg.match(/header\.i=@([^;\s]+)/i);
+          if (mI) passDomains.add(mI[1]);
+          const mD =
+            seg.match(/header\.d=([^;\s]+)/i) || seg.match(/\bd=([^;\s]+)/i);
+          if (mD) passDomains.add(mD[1]);
+        }
+        const mAnyD =
+          seg.match(/header\.d=([^;\s]+)/i) || seg.match(/\bd=([^;\s]+)/i);
+        if (mAnyD) candidates.add(mAnyD[1]);
+        const mAnyI = seg.match(/header\.i=@([^;\s]+)/i);
+        if (mAnyI) candidates.add(mAnyI[1]);
+      }
+    }
+
+    const all = Array.from(candidates);
+    if (all.length === 0) return null;
+
+    const fromReg = registrableDomain(fromDomain ?? undefined);
+    const espDomains = new Set([
+      'mailgun.org',
+      'sendgrid.net',
+      'amazonses.com',
+      'sparkpostmail.com',
+      'postmarkapp.com',
+      'mandrillapp.com',
+      'mailchimp.com',
+    ]);
+
+    function score(domain: string): number {
+      const reg = registrableDomain(domain) ?? domain;
+      let s = 0;
+      if (passDomains.has(domain) || passDomains.has(reg)) s += 10;
+      if (fromReg && reg === fromReg) s += 20; // DMARC-aligned registrable domain
+      // Longer subdomain match of fromDomain gets slight boost
+      if (fromDomain && domain.endsWith('.' + fromDomain)) s += 2;
+      if (!espDomains.has(reg)) s += 1; // prefer non-ESP
+      // Specificity: more labels → slightly higher
+      s += Math.max(0, domain.split('.').length - 2) * 0.1;
+      return s;
+    }
+
+    let best = all[0];
+    let bestScore = score(best);
+    for (const d of all.slice(1)) {
+      const sc = score(d);
+      if (sc > bestScore || (sc === bestScore && d.length > best.length)) {
+        best = d;
+        bestScore = sc;
+      }
+    }
+    return best.toLowerCase();
+  }
+
+  function extractUnsubscribeDomain(raw: string | undefined): string | null {
+    if (!raw) return null;
+    // Prefer an http(s) URL
+    const urlMatch =
+      raw.match(/<\s*(https?:[^>\s]+)\s*>/i) || raw.match(/\bhttps?:[^,>\s]+/i);
+    if (urlMatch) {
+      try {
+        const u = new URL(urlMatch[1] ?? urlMatch[0]);
+        return u.host.toLowerCase();
+      } catch {}
+    }
+    // Fallback: mailto
+    const mailtoMatch =
+      raw.match(/<\s*mailto:([^>\s]+)\s*>/i) || raw.match(/mailto:([^,>\s]+)/i);
+    if (mailtoMatch) {
+      const addr = mailtoMatch[1];
+      return domainFromEmail(addr);
+    }
+    return null;
+  }
+
+  function toPlatformHint(regDomain: string | null): string | null {
+    if (!regDomain) return null;
+    const sld = regDomain.split('.')[0];
+    return sld || null;
+  }
+
+  async function observeSourceInfo(
+    supabase: any,
+    user_id: string,
+    payload: any
+  ) {
+    try {
+      const headers = getHeaderMap(payload);
+      const listId = headers.get('list-id') ?? headers.get('listid');
+      const listIdDomain = extractListIdDomain(listId);
+
+      const dkimHeaders = getHeaderValues(payload, 'dkim-signature');
+      const authResList = [
+        ...getHeaderValues(payload, 'authentication-results'),
+        ...getHeaderValues(payload, 'authentication-results-original'),
+        ...getHeaderValues(payload, 'arc-authentication-results'),
+      ];
+      const fromDomain = domainFromEmail(payload?.From);
+      const dkim_d = extractDkimDomain(authResList, dkimHeaders, fromDomain);
+
+      const returnPath = headers.get('return-path');
+      const returnPathDomain = domainFromEmail(returnPath ?? undefined);
+
+      // fromDomain already computed above
+
+      const listUnsub = headers.get('list-unsubscribe');
+      const unsubscribeDomain = extractUnsubscribeDomain(listUnsub);
+
+      const candidate =
+        dkim_d ||
+        listIdDomain ||
+        fromDomain ||
+        returnPathDomain ||
+        unsubscribeDomain;
+      const regDomain = registrableDomain(candidate);
+      if (!regDomain) return; // Nothing to store
+
+      const platform_hint = toPlatformHint(regDomain);
+
+      // Merge with existing row if present
+      const { data: existing, error: selErr } = await supabase
+        .from('source_observations')
+        .select('*')
+        .eq('user_id', user_id)
+        .eq('registrable_domain', regDomain)
+        .maybeSingle();
+      if (selErr) return; // Non-fatal
+
+      if (existing) {
+        const updates: Record<string, any> = {
+          msg_last_seen: new Date().toISOString(),
+          msg_count: (existing.msg_count ?? 0) + 1,
+        };
+        if (listId && listId !== existing.list_id) updates.list_id = listId;
+        if (dkim_d && dkim_d !== existing.dkim_d) updates.dkim_d = dkim_d;
+        if (fromDomain && fromDomain !== existing.sender_domain)
+          updates.sender_domain = fromDomain;
+        if (
+          unsubscribeDomain &&
+          unsubscribeDomain !== existing.unsubscribe_domain
+        )
+          updates.unsubscribe_domain = unsubscribeDomain;
+        if (platform_hint && platform_hint !== existing.platform_hint)
+          updates.platform_hint = platform_hint;
+
+        await supabase
+          .from('source_observations')
+          .update(updates)
+          .eq('id', existing.id);
+      } else {
+        await supabase.from('source_observations').insert({
+          user_id,
+          registrable_domain: regDomain,
+          list_id: listId ?? null,
+          dkim_d: dkim_d ?? null,
+          sender_domain: fromDomain ?? returnPathDomain ?? null,
+          unsubscribe_domain: unsubscribeDomain ?? null,
+          platform_hint: platform_hint ?? null,
+          // msg_* fields rely on defaults
+        });
+      }
+    } catch (_) {
+      // Do not block processing if observation fails
+    }
+  }
   return async function handler(req: Request): Promise<Response> {
     if (req.method !== 'POST')
       return new Response('Method Not Allowed', { status: 405 });
@@ -145,6 +397,8 @@ export function createHandler({
       }
 
       const user_id = aliasRow.user_id;
+      // Fire-and-forget: observe source info for analytics/attribution
+      observeSourceInfo(supabase, user_id, payload);
 
       const verificationLink = extractForwardVerificationLink(payload);
       if (verificationLink) {

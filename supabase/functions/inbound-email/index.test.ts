@@ -389,3 +389,93 @@ test('all open tasks are fetched for deduplication', async () => {
   // Restore original Date method
   Date.prototype.toISOString = originalToISOString;
 });
+
+test('stores source observation from headers (DKIM aligned + unsubscribe + list-id)', async () => {
+  const supabase = createSupabaseStub();
+  const fetchStub = createFetchStub([]);
+  const handler = makeHandler(supabase, fetchStub);
+
+  const payload = {
+    From: 'noreply@notify.castilleja.org',
+    Subject: 'Hello',
+    TextBody: 'email',
+    Headers: [
+      {
+        Name: 'DKIM-Signature',
+        Value: 'v=1; d=notify.castilleja.org; s=smtp;',
+      },
+      { Name: 'DKIM-Signature', Value: 'v=1; d=mailgun.org; s=mg;' },
+      {
+        Name: 'Authentication-Results',
+        Value:
+          'mx.google.com; dkim=pass header.i=@notify.castilleja.org header.d=notify.castilleja.org; spf=pass',
+      },
+      { Name: 'List-ID', Value: '<announcements.castilleja.org>' },
+      {
+        Name: 'List-Unsubscribe',
+        Value:
+          '<https://click.castilleja.org/unsub?u=123>, <mailto:unsub@castilleja.org>',
+      },
+      { Name: 'Return-Path', Value: '<bounce@notify.castilleja.org>' },
+    ],
+  };
+
+  const res = await handler(makeReq(payload));
+  assertEquals(res.status, 200);
+  assertEquals(supabase.state.source_observations.length, 1);
+  const obs = supabase.state.source_observations[0];
+  assertEquals(obs.user_id, 'user-1');
+  assertEquals(obs.dkim_d, 'notify.castilleja.org');
+  assertEquals(obs.sender_domain, 'notify.castilleja.org');
+  assertEquals(obs.unsubscribe_domain, 'click.castilleja.org');
+  assertEquals(obs.registrable_domain, 'castilleja.org');
+  assertEquals(obs.platform_hint, 'castilleja');
+  assertEquals(obs.msg_count, 1);
+});
+
+test('updates existing source observation and increments count', async () => {
+  const supabase = createSupabaseStub();
+  // Seed existing observation for user-1 and castilleja.org
+  supabase.state.source_observations.push({
+    id: 1,
+    user_id: 'user-1',
+    registrable_domain: 'castilleja.org',
+    list_id: null,
+    dkim_d: null,
+    sender_domain: null,
+    unsubscribe_domain: null,
+    platform_hint: 'castilleja',
+    msg_first_seen: new Date().toISOString(),
+    msg_last_seen: new Date().toISOString(),
+    msg_count: 2,
+  });
+
+  const fetchStub = createFetchStub([]);
+  const handler = makeHandler(supabase, fetchStub);
+
+  const payload = {
+    From: 'noreply@notify.castilleja.org',
+    Subject: 'Hello 2',
+    TextBody: 'email',
+    Headers: [
+      {
+        Name: 'DKIM-Signature',
+        Value: 'v=1; d=notify.castilleja.org; s=smtp;',
+      },
+      {
+        Name: 'Authentication-Results',
+        Value:
+          'mx.google.com; dkim=pass header.i=@notify.castilleja.org header.d=notify.castilleja.org',
+      },
+      { Name: 'List-ID', Value: '<announcements.castilleja.org>' },
+    ],
+  };
+
+  const res = await handler(makeReq(payload));
+  assertEquals(res.status, 200);
+  assertEquals(supabase.state.source_observations.length, 1);
+  const obs = supabase.state.source_observations[0];
+  assertEquals(obs.msg_count, 3); // incremented
+  assertEquals(obs.dkim_d, 'notify.castilleja.org');
+  assertEquals(obs.list_id, '<announcements.castilleja.org>');
+});

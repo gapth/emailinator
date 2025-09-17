@@ -5,6 +5,7 @@ import os
 import sys
 from email.header import decode_header, make_header
 from email.message import Message
+from email.utils import getaddresses
 from pathlib import Path
 
 import requests
@@ -30,8 +31,12 @@ def _decode_header(value: str | None) -> str | None:
 
 
 def _extract_bodies(msg: Message) -> tuple[str | None, str | None]:
-    text_body = None
-    html_body = None
+    """Return (TextBody, HtmlBody).
+    - Preserves raw HTML for HtmlBody when available (aligns with Postmark).
+    - If only HTML exists, also synthesize TextBody by stripping HTML.
+    """
+    text_body: str | None = None
+    html_body: str | None = None
     if msg.is_multipart():
         for part in msg.walk():
             ctype = part.get_content_type()
@@ -46,8 +51,11 @@ def _extract_bodies(msg: Message) -> tuple[str | None, str | None]:
             if ctype == "text/plain" and text_body is None:
                 text_body = content
             elif ctype == "text/html" and html_body is None:
-                soup = BeautifulSoup(content, "html.parser")
-                html_body = soup.get_text(separator="\n", strip=True)
+                html_body = content  # keep raw HTML for HtmlBody
+                # Synthesize text if not present yet
+                if text_body is None:
+                    soup = BeautifulSoup(content, "html.parser")
+                    text_body = soup.get_text(separator="\n", strip=True)
     else:
         payload = msg.get_payload(decode=True)
         if payload:
@@ -57,8 +65,10 @@ def _extract_bodies(msg: Message) -> tuple[str | None, str | None]:
             except Exception:
                 content = payload.decode("utf-8", errors="replace")
             if msg.get_content_type() == "text/html":
+                html_body = content
+                # Synthesize text from HTML
                 soup = BeautifulSoup(content, "html.parser")
-                html_body = soup.get_text(separator="\n", strip=True)
+                text_body = soup.get_text(separator="\n", strip=True)
             else:
                 text_body = content
     return text_body, html_body
@@ -101,6 +111,26 @@ def main() -> None:
     message_id = _decode_header(msg.get("Message-ID"))
     text_body, html_body = _extract_bodies(msg)
 
+    # Build Postmark-style Headers array at top level
+    headers_list: list[dict[str, str]] = []
+    for name, value in msg.items():
+        headers_list.append({"Name": name, "Value": _decode_header(value) or ""})
+
+    # Build Postmark-style Full address arrays when possible
+    def _full_from_header(header_value: str | None) -> list[dict[str, str]]:
+        if not header_value:
+            return []
+        result: list[dict[str, str]] = []
+        for name, email_addr in getaddresses([header_value]):
+            result.append(
+                {
+                    "Email": email_addr or "",
+                    "Name": name or "",
+                    "MailboxHash": "",
+                }
+            )
+        return result
+
     # Tell inbound-email which alias this email is for by BCCing it to that address.
     # The edge function will use that to look up the user.
     bcc_email = args.alias
@@ -116,11 +146,16 @@ def main() -> None:
         "From": from_email,
         "To": to_email,
         "Bcc": bcc_email,
+        "OriginalRecipient": bcc_email,
         "Subject": subject,
         "TextBody": text_body,
         "HtmlBody": html_body,
         "Date": sent_at,
         "MessageID": message_id,
+        "ToFull": _full_from_header(to_email),
+        "CcFull": _full_from_header(_decode_header(msg.get("Cc"))),
+        "BccFull": [{"Email": bcc_email, "Name": "", "MailboxHash": ""}],
+        "Headers": headers_list,
         "ProviderMeta": {"source": "cli"},
     }
     print("Payload:")
