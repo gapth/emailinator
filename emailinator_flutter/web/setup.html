@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emailinator Setup</title>
+  <meta name="description" content="Step-by-step guide to forward school emails to Emailinator.">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <style>
+    :root {
+      --bg: #0f172a;         /* slate-900 */
+      --panel: #ffffff;
+      --muted: #64748b;      /* slate-500 */
+      --border: #e2e8f0;     /* slate-200 */
+      --accent: #2563eb;     /* blue-600 */
+      --accent-50: #eff6ff;  /* blue-50 */
+      --success: #16a34a;    /* green-600 */
+      --warning: #f59e0b;    /* amber-500 */
+    }
+
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji;
+      color: #0f172a;
+    }
+
+    /* Header */
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f172a 100%);
+      color: white;
+      padding: 48px 24px;
+    }
+    .hero-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      gap: 32px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .hero h1 { margin: 0 0 8px; font-size: 40px; letter-spacing: -0.02em; }
+    .hero p { margin: 0; color: #cbd5e1; font-size: 18px; }
+
+    /* Content */
+    .container {
+      max-width: 1200px;
+      margin: 24px auto 64px;
+      padding: 0 24px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 10px 20px rgba(2, 6, 23, 0.06);
+    }
+
+    /* Alias box */
+    .alias {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 16px;
+      background: #f8fafc;  /* slate-50 */
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-top: 8px;
+    }
+    .alias .label { font-weight: 600; color: #334155; }
+    .alias .value { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn {
+      appearance: none; border: 1px solid #cbd5e1; background: white; color: #0f172a;
+      padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    .btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .btn.primary:hover { filter: brightness(1.05); }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Steps */
+    .steps { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    .step { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+    .step-header { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--accent-50); border-bottom: 1px solid var(--border); }
+    .step-num { width: 34px; height: 34px; border-radius: 999px; background: var(--accent); color: white; display: grid; place-items: center; font-weight: 800; }
+    .step-title { font-weight: 800; letter-spacing: -0.01em; }
+    .step-sub { color: var(--muted); font-size: 14px; }
+    .step-body { padding: 18px; background: white; }
+    .callout { padding: 12px; border-radius: 10px; border: 1px solid #dbeafe; background: #eff6ff; color: #1e40af; display: flex; gap: 10px; align-items: flex-start; }
+    .tip { padding: 12px; border-radius: 10px; border: 1px solid #fed7aa; background: #fffbeb; color: #78350f; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    /* Screenshot placeholder */
+    .screenshot {
+      margin-top: 14px;
+      width: 100%;
+      min-height: 240px;
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      display: grid; place-items: center;
+      color: #64748b; background: #f8fafc;
+    }
+
+    /* Two-column on wide screens */
+    @media (min-width: 1100px) {
+      .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div>
+        <h1>Forward school emails to Emailinator</h1>
+        <p>You’ll need ~2 minutes. Follow the steps below.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel" style="padding: 20px 20px 8px;">
+      <h2 style="margin: 0;">Your forwarding address</h2>
+      <p class="step-sub" style="margin-top: 6px;">Copy this address to add it in Gmail settings.</p>
+      <div class="alias">
+        <span class="label">Alias:</span>
+        <span class="value" id="aliasValue">your.alias@in.emailinator.app</span>
+        <button class="btn" id="copyBtn" type="button">Copy</button>
+      </div>
+      <p class="step-sub" style="margin: 10px 0 0;">Tip: You can pass <code>?alias=</code> in the URL to prefill.</p>
+    </section>
+
+    <div style="height: 18px;"></div>
+
+    <section class="grid-2">
+      <div class="steps">
+        <!-- Step 1 -->
+        <article class="step">
+          <div class="step-header">
+            <div class="step-num">1</div>
+            <div>
+              <div class="step-title">Add forwarding address</div>
+              <div class="step-sub">Gmail → Settings → Forwarding and POP/IMAP</div>
+            </div>
+          </div>
+          <div class="step-body">
+            <div class="callout">
+              <div>Paste your address from above. Gmail will send a verification link to Emailinator.</div>
+            </div>
+            <div class="actions" style="margin-top: 12px;">
+              <a class="btn primary" target="_blank" rel="noopener" href="https://mail.google.com/#settings/fwdandpop">Open Gmail Forwarding Settings</a>
+            </div>
+            <div class="screenshot">Screenshot placeholder: Gmail forwarding dialog</div>
+          </div>
+        </article>
+
+        <!-- Step 2 -->
+        <article class="step">
+          <div class="step-header">
+            <div class="step-num">2</div>
+            <div>
+              <div class="step-title">Set up forwarding rule</div>
+              <div class="step-sub">Choose which emails to forward (e.g., school domains)</div>
+            </div>
+          </div>
+          <div class="step-body">
+            <p>Create a Gmail filter that matches your school senders and set the action to “Forward to” your Emailinator address.</p>
+            <div class="screenshot">Screenshot placeholder: Gmail filter setup</div>
+          </div>
+        </article>
+
+        <!-- Step 3 -->
+        <article class="step">
+          <div class="step-header">
+            <div class="step-num">3</div>
+            <div>
+              <div class="step-title">Validate with test emails</div>
+              <div class="step-sub">Send a couple of tests and confirm they appear</div>
+            </div>
+          </div>
+          <div class="step-body">
+            <p>Send a test message that matches your filter. Then check Emailinator for extracted tasks.</p>
+            <div class="tip" style="margin-top: 10px;">If you don’t see a verification banner in Emailinator within a minute, re-check Step 1.</div>
+            <div class="screenshot" style="margin-top: 12px;">Screenshot placeholder: Emailinator tasks view</div>
+          </div>
+        </article>
+      </div>
+
+      <aside class="panel" style="padding: 18px;">
+        <h3 style="margin-top: 0;">Notes</h3>
+        <ul style="margin-top: 8px; color: #334155; line-height: 1.6;">
+          <li>You can redo these steps anytime from the app’s Setup screen.</li>
+          <li>If you have multiple Gmail accounts, switch to the correct one from the top-right avatar before Step 1.</li>
+          <li>We only process messages you choose to forward. You can refine your filter anytime.</li>
+        </ul>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    // Allow pre-filling alias via ?alias=
+    (function() {
+      const params = new URLSearchParams(location.search);
+      const alias = params.get('alias');
+      const el = document.getElementById('aliasValue');
+      if (alias && el) { el.textContent = alias; }
+    })();
+
+    // Copy alias helper
+    (function() {
+      const btn = document.getElementById('copyBtn');
+      const el = document.getElementById('aliasValue');
+      if (!btn || !el) return;
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(el.textContent || '');
+          btn.textContent = 'Copied!';
+          setTimeout(() => (btn.textContent = 'Copy'), 1200);
+        } catch (_) {
+          // noop
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
+

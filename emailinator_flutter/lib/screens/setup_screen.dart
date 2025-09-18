@@ -19,6 +19,9 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _isLoading = true;
   String? _verificationLink;
   int? _verificationId;
+  // Stepper state for provider-specific flows
+  int _currentStep = 0;
+  bool _gmailStep1Completed = false;
 
   @override
   void initState() {
@@ -307,39 +310,74 @@ class _SetupScreenState extends State<SetupScreen> {
             // Clear saved provider to go back to picker
             final prefs = await SharedPreferences.getInstance();
             await prefs.remove('selected_email_provider');
-            setState(() => _selectedProvider = null);
+            setState(() {
+              _selectedProvider = null;
+              _currentStep = 0;
+              _gmailStep1Completed = false;
+            });
           },
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          // Step G1
-          _buildGmailStep(
-            stepNumber: 'G1',
-            title: 'Add your Emailinator address in Gmail',
-            isCompleted: false, // TODO: Track completion state
-            child: Column(
+      body: Stepper(
+        currentStep: _currentStep,
+        onStepTapped: (index) {
+          setState(() => _currentStep = index);
+        },
+        controlsBuilder: (context, details) {
+          final bool canContinue;
+          final String continueLabel;
+          if (_currentStep == 0) {
+            canContinue = _gmailStep1Completed;
+            continueLabel = 'Continue';
+          } else {
+            // Placeholders for now
+            canContinue = false;
+            continueLabel = 'Continue';
+          }
+
+          return Row(
+            children: [
+              ElevatedButton(
+                onPressed: canContinue
+                    ? () {
+                        if (_currentStep < 2) {
+                          setState(() => _currentStep += 1);
+                        }
+                      }
+                    : null,
+                child: Text(continueLabel),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _currentStep > 0
+                    ? () {
+                        setState(() => _currentStep -= 1);
+                      }
+                    : null,
+                child: const Text('Back'),
+              ),
+            ],
+          );
+        },
+        steps: [
+          Step(
+            title: const Text('Add Emailinator in Gmail'),
+            subtitle: const Text('Add forwarding address and verify'),
+            isActive: _currentStep >= 0,
+            state:
+                _gmailStep1Completed ? StepState.complete : StepState.indexed,
+            content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 16),
-
-                // Open Gmail button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _openGmailForwarding,
                     icon: const Icon(Icons.open_in_new),
-                    label: const Text('Open Gmail Forwarding'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
+                    label: const Text('Open Gmail Forwarding Settings'),
                   ),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Address to paste
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -366,10 +404,7 @@ class _SetupScreenState extends State<SetupScreen> {
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Tip
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -392,11 +427,8 @@ class _SetupScreenState extends State<SetupScreen> {
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Verification section
-                if (_verificationLink != null) ...[
+                const SizedBox(height: 12),
+                if (_verificationLink != null)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -433,87 +465,45 @@ class _SetupScreenState extends State<SetupScreen> {
                       ],
                     ),
                   ),
-                ],
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _gmailStep1Completed = true;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Step 1 marked as done')),
+                      );
+                    },
+                    icon: const Icon(Icons.check),
+                    label: const Text('Mark Step 1 as done'),
+                  ),
+                ),
               ],
             ),
           ),
-
-          const SizedBox(height: 24),
-
-          // Step G2 (minimal for now)
-          _buildGmailStep(
-            stepNumber: 'G2',
-            title: 'Choose which emails to forward',
-            isCompleted: false, // TODO: Track completion state
-            child: const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'Create a filter (only forward school mail)',
-                style: TextStyle(color: Colors.grey),
-              ),
+          Step(
+            title: const Text('Set up forwarding rule'),
+            subtitle: const Text('Choose which emails to forward'),
+            isActive: _currentStep >= 1,
+            state: StepState.indexed,
+            content: const Text(
+              'Placeholder: Create a Gmail filter to forward only school emails. (Coming soon)',
+              style: TextStyle(color: Colors.grey),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGmailStep({
-    required String stepNumber,
-    required String title,
-    required bool isCompleted,
-    required Widget child,
-  }) {
-    return Card(
-      elevation: 2,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isCompleted ? Colors.green.shade100 : Colors.blue.shade50,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: isCompleted ? Colors.green : Colors.blue,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Text(
-                      stepNumber,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                if (isCompleted)
-                  const Icon(Icons.check_circle, color: Colors.green),
-              ],
+          Step(
+            title: const Text('Validate with test emails'),
+            subtitle: const Text('Send tests and confirm receipt'),
+            isActive: _currentStep >= 2,
+            state: StepState.indexed,
+            content: const Text(
+              'Placeholder: Send a couple of test messages to ensure forwarding works. (Coming soon)',
+              style: TextStyle(color: Colors.grey),
             ),
           ),
-          child,
         ],
       ),
     );
