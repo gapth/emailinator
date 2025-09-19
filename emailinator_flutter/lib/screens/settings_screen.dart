@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import 'package:emailinator_flutter/models/raw_email.dart';
 import 'package:emailinator_flutter/utils/date_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:emailinator_flutter/config.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String? _userEmail;
+  String? _userAlias;
   List<RawEmail> _recentEmails = [];
   bool _isLoadingEmails = false;
   DateTime? _forcedToday = DateProvider.forcedToday;
@@ -40,6 +43,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .maybeSingle();
 
     if (aliasRow == null) {
+      // TODO: Change to a more recognizationg alias format:
+      // user_email_domain_name_random_numbers@in.emailinator.app.
+      // For example, for user with email alice@gmail.com,
+      // the alias could be: u_alice_gmail_com_12345678@in.emailinator.app
       final uuid = const Uuid().v4().replaceAll('-', '').substring(0, 8);
       final alias = 'u_$uuid@in.emailinator.app';
       await Supabase.instance.client.from('email_aliases').insert({
@@ -47,6 +54,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'alias': alias,
         'active': true,
       });
+      _userAlias = alias;
+    } else {
+      _userAlias = aliasRow['alias'] as String?;
     }
 
     await _loadRecentEmails();
@@ -139,8 +149,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Set up email forwarding'),
             leading: const Icon(Icons.settings_outlined),
             trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: () {
-              Navigator.pushNamed(context, '/setup');
+            onTap: () async {
+              final params = {
+                if (_userAlias != null) 'alias': _userAlias!,
+                'sbUrl': supabaseUrl,
+                'sbAnon': supabaseAnonKey,
+              };
+              Uri? uri;
+              if (kIsWeb) {
+                // Use current origin on web and open a new tab/window
+                final origin = Uri.base.origin; // e.g., https://app.example.com
+                uri = Uri.parse(origin)
+                    .replace(path: '/setup.html', queryParameters: params);
+                await launchUrl(uri, webOnlyWindowName: '_blank');
+              } else {
+                // On native, require PUBLIC_WEB_BASE_URL to be defined
+                if (publicWebBaseUrl.isEmpty) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'Setup page URL not configured. Define PUBLIC_WEB_BASE_URL.')),
+                    );
+                  }
+                  return;
+                }
+                uri = Uri.parse(publicWebBaseUrl)
+                    .replace(path: '/setup.html', queryParameters: params);
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
             },
           ),
           const SizedBox(height: 16),

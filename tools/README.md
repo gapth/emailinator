@@ -35,7 +35,9 @@ Required environment variables:
 - `POSTMARK_BASIC_PASSWORD` - Basic auth password for the Supabase function
 - `POSTMARK_ALLOWED_IPS` - Comma-separated list of IPs of email submitter
 - `INBOUND_EMAIL_DOMAIN` - Domain name for inbound email
-- `SUPABASE_URL` = For local server, use http://127.0.0.1:54321
+- `SUPABASE_URL` - For local server, use http://127.0.0.1:54321
+- `PUBLIC_WEB_BASE_URL` - Base URL for main web site, for showing web pages from
+  mobile apps
 
 ### sanitize_emails.py
 

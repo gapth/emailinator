@@ -6,11 +6,10 @@ import 'dart:async';
 import 'package:emailinator_flutter/screens/login_screen.dart';
 import 'package:emailinator_flutter/screens/home_screen.dart';
 import 'package:emailinator_flutter/screens/change_password_screen.dart';
-import 'package:emailinator_flutter/screens/setup_screen.dart';
 import 'package:emailinator_flutter/models/app_state.dart';
+import 'package:emailinator_flutter/config.dart';
 
-const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+// Supabase config is defined in config.dart
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +46,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
         '/change-password': (context) => const ChangePasswordScreen(),
-        '/setup': (context) => const SetupScreen(),
+        // setup is handled via external web page
       },
     );
   }

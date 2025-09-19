@@ -273,7 +273,7 @@ npx prettier --write "supabase/functions/**/*.{js,ts,json}"
 
 **Environment Variables Required:**
 
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY` (for Flutter app)
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PUBLIC_WEB_BASE_URL` (for Flutter app)
 - `POSTMARK_BASIC_USER`, `POSTMARK_BASIC_PASSWORD` (for email processing)
 - `OPENAI_API_KEY` (for AI task extraction)
 

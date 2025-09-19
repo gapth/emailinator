@@ -6,6 +6,7 @@
   <title>Emailinator Setup</title>
   <meta name="description" content="Step-by-step guide to forward school emails to Emailinator.">
   <link rel="icon" type="image/png" href="favicon.png"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.1/dist/umd/supabase.js"></script>
   <style>
     :root {
       --bg: #0f172a;         /* slate-900 */
@@ -142,13 +143,23 @@
             </div>
           </div>
           <div class="step-body">
-            <div class="callout">
-              <div>Paste your address from above. Gmail will send a verification link to Emailinator.</div>
+            <div class="actions" style="margin-top: 4px;">
+              <a class="btn primary" target="_blank" rel="noopener" href="https://mail.google.com/">Open Gmail</a>
             </div>
-            <div class="actions" style="margin-top: 12px;">
-              <a class="btn primary" target="_blank" rel="noopener" href="https://mail.google.com/#settings/fwdandpop">Open Gmail Forwarding Settings</a>
+            <p style="margin:12px 0 0; color:#334155;">Follow these steps to add the address above to Gmail forwarding address</p>
+            <div class="screenshot" style="margin-top: 12px; border: 0; padding: 0; aspect-ratio: 16/9; min-height: 0;">
+              <iframe
+                width="100%"
+                height="100%"
+                src="https://www.youtube.com/embed/zlyndAJcGl0?rel=0"
+                title="Emailinator Gmail Forwarding Setup"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+                style="display:block; border:0; border-radius:12px;"
+              ></iframe>
             </div>
-            <div class="screenshot">Screenshot placeholder: Gmail forwarding dialog</div>
+            <div id="verificationBox" style="display:none; margin-top:12px;"></div>
           </div>
         </article>
 
@@ -196,30 +207,107 @@
   </main>
 
   <script>
-    // Allow pre-filling alias via ?alias=
-    (function() {
-      const params = new URLSearchParams(location.search);
-      const alias = params.get('alias');
-      const el = document.getElementById('aliasValue');
-      if (alias && el) { el.textContent = alias; }
-    })();
+    const qs = new URLSearchParams(location.search);
+    const aliasParam = qs.get('alias');
+    const sbUrl = qs.get('sbUrl');
+    const sbAnon = qs.get('sbAnon');
+
+    const aliasEl = document.getElementById('aliasValue');
+    const copyBtn = document.getElementById('copyBtn');
+    const verificationBox = document.getElementById('verificationBox');
+
+    // Prefill alias from query param immediately if present
+    if (aliasParam && aliasEl) aliasEl.textContent = aliasParam;
 
     // Copy alias helper
-    (function() {
-      const btn = document.getElementById('copyBtn');
-      const el = document.getElementById('aliasValue');
-      if (!btn || !el) return;
-      btn.addEventListener('click', async () => {
+    if (copyBtn && aliasEl) {
+      copyBtn.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText(el.textContent || '');
-          btn.textContent = 'Copied!';
-          setTimeout(() => (btn.textContent = 'Copy'), 1200);
-        } catch (_) {
-          // noop
-        }
+          await navigator.clipboard.writeText(aliasEl.textContent || '');
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => (copyBtn.textContent = 'Copy'), 1200);
+        } catch (_) {}
       });
+    }
+
+    let supabaseClient = null;
+    async function initSupabase() {
+      try {
+        if (!sbUrl || !sbAnon || !window.supabase) return null;
+        supabaseClient = window.supabase.createClient(sbUrl, sbAnon);
+        return supabaseClient;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function loadAliasIfMissing() {
+      if (!supabaseClient || aliasEl.textContent) return;
+      const { data: userData } = await supabaseClient.auth.getUser();
+      const user = userData?.user;
+      if (!user) return;
+      const { data, error } = await supabaseClient
+        .from('email_aliases')
+        .select('alias')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .maybeSingle();
+      if (!error && data?.alias && aliasEl) aliasEl.textContent = data.alias;
+    }
+
+    async function renderVerification(ver) {
+      if (!verificationBox) return;
+      verificationBox.style.display = 'block';
+      verificationBox.innerHTML = `
+        <div class="callout" style="border-color:#86efac;background:#ecfdf5;color:#166534;">
+          <div style="flex:1;">
+            <strong>Verification email received!</strong><br/>
+            Click to open and confirm forwarding in Gmail.
+          </div>
+          <button id="verifyBtn" class="btn primary">Open verification</button>
+        </div>
+      `;
+      const btn = document.getElementById('verifyBtn');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          try {
+            window.open(ver.verification_link, '_blank', 'noopener');
+            if (ver.id) {
+              await supabaseClient
+                .from('forwarding_verifications')
+                .update({ clicked_at: new Date().toISOString() })
+                .eq('id', ver.id);
+            }
+          } catch (_) {}
+        });
+      }
+    }
+
+    async function pollVerification() {
+      if (!supabaseClient) return;
+      const { data: userData } = await supabaseClient.auth.getUser();
+      const user = userData?.user;
+      if (!user) return;
+      const { data, error } = await supabaseClient
+        .from('forwarding_verifications')
+        .select('id, verification_link, clicked_at, created_at')
+        .eq('user_id', user.id)
+        .is('clicked_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!error && data?.verification_link) {
+        renderVerification(data);
+      }
+    }
+
+    (async () => {
+      await initSupabase();
+      await loadAliasIfMissing();
+      await pollVerification();
+      // Poll every 10s while on this page
+      setInterval(pollVerification, 10000);
     })();
   </script>
 </body>
 </html>
-
