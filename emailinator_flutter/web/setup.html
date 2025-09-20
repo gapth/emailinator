@@ -241,6 +241,28 @@
       }
     }
 
+    // Bridge session from Flutter web (supabase-dart) or Supabase JS if present.
+    function findSupabaseTokensFromLocalStorage() {
+      try {
+        // Common keys: supabase-dart uses 'supabase.auth.token'; supabase-js uses 'sb-<ref>-auth-token'
+        const keys = Object.keys(localStorage);
+        for (const k of keys) {
+          if (k === 'supabase.auth.token' || (k.startsWith('sb-') && k.endsWith('-auth-token'))) {
+            const raw = localStorage.getItem(k);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw);
+            const fromCurrent = parsed?.currentSession || parsed?.current_session || parsed?.session;
+            const access = parsed?.access_token || fromCurrent?.access_token;
+            const refresh = parsed?.refresh_token || fromCurrent?.refresh_token;
+            if (access && refresh) {
+              return { access_token: access, refresh_token: refresh };
+            }
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+
     async function loadAliasIfMissing() {
       if (!supabaseClient || aliasEl.textContent) return;
       const { data: userData } = await supabaseClient.auth.getUser();
@@ -303,6 +325,14 @@
 
     (async () => {
       await initSupabase();
+      // If a session exists in localStorage (from the Flutter web app), adopt it.
+      try {
+        const tokens = findSupabaseTokensFromLocalStorage();
+        if (supabaseClient && tokens) {
+          await supabaseClient.auth.setSession(tokens);
+        }
+      } catch (_) {}
+
       await loadAliasIfMissing();
       await pollVerification();
       // Poll every 10s while on this page
