@@ -6,7 +6,9 @@
   <title>Emailinator Setup</title>
   <meta name="description" content="Step-by-step guide to forward school emails to Emailinator.">
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.1/dist/umd/supabase.js"></script>
+  <!-- Supabase JS is not required for this page's minimal needs.
+       We avoid initializing a JS client/session to prevent broadcasting
+       auth events that can conflict with the Flutter app's auth state. -->
   <style>
     :root {
       --bg: #0f172a;         /* slate-900 */
@@ -230,16 +232,10 @@
       });
     }
 
-    let supabaseClient = null;
-    async function initSupabase() {
-      try {
-        if (!sbUrl || !sbAnon || !window.supabase) return null;
-        supabaseClient = window.supabase.createClient(sbUrl, sbAnon);
-        return supabaseClient;
-      } catch (e) {
-        return null;
-      }
-    }
+    // We avoid creating a Supabase JS client/session here to prevent
+    // cross-tab auth broadcasts that can cause parsing issues in Flutter.
+    // Instead, we read the existing access_token from localStorage (same origin)
+    // and call the REST API directly with fetch.
 
     // Bridge session from Flutter web (supabase-dart) or Supabase JS if present.
     function findSupabaseTokensFromLocalStorage() {
@@ -263,18 +259,60 @@
       return null;
     }
 
+    function decodeJwt(token) {
+      try {
+        const payload = token.split('.')[1];
+        const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+        return JSON.parse(decodeURIComponent(escape(json)));
+      } catch (_) { return null; }
+    }
+
+    function buildRestUrl(path, params) {
+      const url = new URL(sbUrl.replace(/\/$/, '') + '/rest/v1/' + path.replace(/^\//, ''));
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          url.searchParams.set(k, v);
+        }
+      }
+      return url.toString();
+    }
+
+    async function apiFetch(path, { method = 'GET', headers = {}, body = null, params = {} } = {}) {
+      const tokens = findSupabaseTokensFromLocalStorage();
+      if (!tokens?.access_token) return { ok: false, status: 401 };
+      const url = buildRestUrl(path, params);
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'apikey': sbAnon || '',
+          'Authorization': `Bearer ${tokens.access_token}`,
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: body ? JSON.stringify(body) : null,
+      });
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      return { ok: res.ok, status: res.status, data };
+    }
+
     async function loadAliasIfMissing() {
-      if (!supabaseClient || aliasEl.textContent) return;
-      const { data: userData } = await supabaseClient.auth.getUser();
-      const user = userData?.user;
-      if (!user) return;
-      const { data, error } = await supabaseClient
-        .from('email_aliases')
-        .select('alias')
-        .eq('user_id', user.id)
-        .eq('active', true)
-        .maybeSingle();
-      if (!error && data?.alias && aliasEl) aliasEl.textContent = data.alias;
+      if (aliasEl.textContent) return;
+      const tokens = findSupabaseTokensFromLocalStorage();
+      const payload = tokens?.access_token ? decodeJwt(tokens.access_token) : null;
+      const userId = payload?.sub || payload?.user_id;
+      if (!userId) return;
+      const resp = await apiFetch('email_aliases', {
+        params: {
+          select: 'alias',
+          user_id: `eq.${userId}`,
+          active: 'eq.true',
+          limit: '1',
+        }
+      });
+      if (resp.ok && Array.isArray(resp.data) && resp.data.length > 0 && resp.data[0]?.alias && aliasEl) {
+        aliasEl.textContent = resp.data[0].alias;
+      }
     }
 
     async function renderVerification(ver) {
@@ -295,10 +333,12 @@
           try {
             window.open(ver.verification_link, '_blank', 'noopener');
             if (ver.id) {
-              await supabaseClient
-                .from('forwarding_verifications')
-                .update({ clicked_at: new Date().toISOString() })
-                .eq('id', ver.id);
+              await apiFetch('forwarding_verifications', {
+                method: 'PATCH',
+                params: { id: `eq.${ver.id}` },
+                headers: { 'Prefer': 'return=minimal' },
+                body: { clicked_at: new Date().toISOString() },
+              });
             }
           } catch (_) {}
         });
@@ -306,33 +346,28 @@
     }
 
     async function pollVerification() {
-      if (!supabaseClient) return;
-      const { data: userData } = await supabaseClient.auth.getUser();
-      const user = userData?.user;
-      if (!user) return;
-      const { data, error } = await supabaseClient
-        .from('forwarding_verifications')
-        .select('id, verification_link, clicked_at, created_at')
-        .eq('user_id', user.id)
-        .is('clicked_at', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!error && data?.verification_link) {
-        renderVerification(data);
+      const tokens = findSupabaseTokensFromLocalStorage();
+      const payload = tokens?.access_token ? decodeJwt(tokens.access_token) : null;
+      const userId = payload?.sub || payload?.user_id;
+      if (!userId) return;
+      const resp = await apiFetch('forwarding_verifications', {
+        params: {
+          select: 'id,verification_link,clicked_at,created_at',
+          user_id: `eq.${userId}`,
+          'clicked_at': 'is.null',
+          order: 'created_at.desc',
+          limit: '1',
+        }
+      });
+      if (resp.ok) {
+        const rows = Array.isArray(resp.data) ? resp.data : [];
+        const row = rows[0];
+        if (row?.verification_link) renderVerification(row);
       }
     }
 
     (async () => {
-      await initSupabase();
-      // If a session exists in localStorage (from the Flutter web app), adopt it.
-      try {
-        const tokens = findSupabaseTokensFromLocalStorage();
-        if (supabaseClient && tokens) {
-          await supabaseClient.auth.setSession(tokens);
-        }
-      } catch (_) {}
-
+      // Use existing tokens (from the Flutter app) directly via REST.
       await loadAliasIfMissing();
       await pollVerification();
       // Poll every 10s while on this page
