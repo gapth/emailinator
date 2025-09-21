@@ -145,9 +145,11 @@
             </div>
           </div>
           <div class="step-body">
-            <div class="actions" style="margin-top: 4px;">
-              <a class="btn primary" target="_blank" rel="noopener" href="https://mail.google.com/">Open Gmail</a>
+            <div class="actions" style="margin-top: 4px; align-items: center;">
+              <a id="openGmail" class="btn primary" target="_blank" rel="noopener" href="https://mail.google.com/mail/u/0/?ui=1#inbox">Open Gmail</a>
+              <a id="openGmailIntent" class="btn" target="_blank" rel="noopener" href="#" style="display:none;">Open in Chrome (Android)</a>
             </div>
+            <div id="gmailHelp" class="step-sub" style="margin-top:8px; color:#475569;"></div>
             <p style="margin:12px 0 0; color:#334155;">Follow these steps to add the address above to Gmail forwarding address</p>
             <div class="screenshot" style="margin-top: 12px; border: 0; padding: 0; aspect-ratio: 16/9; min-height: 0;">
               <iframe
@@ -366,12 +368,71 @@
       }
     }
 
+    // ------- Gmail link helpers (device/browser detection) -------
+    function detectEnv() {
+      const ua = navigator.userAgent || '';
+      const platform = navigator.platform || '';
+      const vendor = navigator.vendor || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+      const isAndroid = /Android/.test(ua);
+      const isChrome = /Chrome|CriOS/.test(ua) && !/Edg|OPR/.test(ua);
+      const isSafari = /Safari/.test(ua) && /Apple/.test(vendor) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+      const isFirefox = /Firefox|FxiOS/.test(ua);
+      const isMobile = isIOS || isAndroid || /Mobile/.test(ua);
+      return { ua, platform, isIOS, isAndroid, isChrome, isSafari, isFirefox, isMobile };
+    }
+
+    function getGmailDesktopUrl() {
+      // Best-effort desktop UI route
+      return 'https://mail.google.com/mail/u/0/?ui=1#inbox';
+    }
+
+    function getAndroidChromeIntentUrl(url) {
+      // Open with Chrome on Android to reduce app deep link takeover
+      const encFallback = encodeURIComponent(url);
+      return `intent://mail.google.com/mail/u/0/?ui=1#inbox#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encFallback};end`;
+    }
+
+    function renderGmailHelp(env) {
+      const help = document.getElementById('gmailHelp');
+      if (!help) return;
+      let msg = '';
+      if (env.isIOS && env.isSafari) {
+        msg = 'iOS Safari: Tap aA → Request Desktop Website. If the Gmail app opens, long‑press the button and choose “Open in New Tab.”';
+      } else if (env.isIOS && env.isChrome) {
+        msg = 'iOS Chrome: Tap ⋯ → Request Desktop Site. If the app opens, long‑press the button and choose “Open in New Tab.”';
+      } else if (env.isAndroid && env.isChrome) {
+        msg = 'Android Chrome: Tap ⋮ → Desktop site. If the Gmail app opens, use “Open in Chrome (Android)” or long‑press → Open in new tab.';
+      } else if (env.isAndroid && env.isFirefox) {
+        msg = 'Android Firefox: Tap ⋮ → Request desktop site. If the app opens, long‑press → Open link in new tab.';
+      } else if (!env.isMobile) {
+        msg = 'Opens Gmail in a new tab.';
+      }
+      help.textContent = msg;
+    }
+
+    function setupGmailLinks() {
+      const env = detectEnv();
+      const anchor = document.getElementById('openGmail');
+      const intent = document.getElementById('openGmailIntent');
+      const desktopUrl = getGmailDesktopUrl();
+      if (anchor) anchor.href = desktopUrl;
+      if (env.isAndroid && env.isChrome && intent) {
+        intent.style.display = 'inline-block';
+        intent.href = getAndroidChromeIntentUrl(desktopUrl);
+        intent.title = 'Try this if the Gmail app opens instead';
+      }
+      renderGmailHelp(env);
+    }
+
     (async () => {
       // Use existing tokens (from the Flutter app) directly via REST.
       await loadAliasIfMissing();
       await pollVerification();
       // Poll every 10s while on this page
       setInterval(pollVerification, 10000);
+      // Configure Gmail links and per-browser help
+      setupGmailLinks();
     })();
   </script>
 </body>
