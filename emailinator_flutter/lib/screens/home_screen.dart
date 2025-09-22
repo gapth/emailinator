@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:emailinator_flutter/services/analytics_service.dart';
 
 import 'package:emailinator_flutter/models/app_state.dart';
 import 'package:emailinator_flutter/widgets/task_list_item.dart';
@@ -21,8 +22,15 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _logAppEntered();
       _loadTasks();
     });
+  }
+
+  Future<void> _logAppEntered() async {
+    await AnalyticsService.logAppEntered(
+      metadata: const {'screen': 'home'},
+    );
   }
 
   Future<void> _loadTasks() async {
