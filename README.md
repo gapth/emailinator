@@ -7,6 +7,17 @@ communications—by focusing on the tasks they need to handle. Users forward
 messages to the system, which extracts actionable tasks and lets each family
 decide how involved the assistant should be.
 
+## What I Learned
+
+Emailinator was a hands-on project to explore how AI can help users manage
+everyday email more proactively. I used it to practice product scoping,
+full-stack development, AI-assisted workflows, and designing user experiences
+around ambiguity, trust, and user control.
+
+I have since paused active development after using the prototype to validate the
+product direction and better understand the tradeoffs between automation,
+usefulness, and simplicity.
+
 ## High-level architecture
 
 - **Supabase** provides the database, server logic, and authentication.
